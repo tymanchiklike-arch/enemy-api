@@ -1,0 +1,29 @@
+services:
+  enemy-pg:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: enemy
+      POSTGRES_PASSWORD: enemy
+      POSTGRES_DB: enemy
+    volumes:
+      - enemy-pg-data:/var/lib/postgresql/data
+
+  enemy-api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - enemy-pg
+    ports:
+      - "8787:8787"
+    environment:
+      PORT: "8787"
+      DATABASE_URL: "postgres://enemy:enemy@enemy-pg:5432/enemy"
+      PUBLIC_BASE: "https://api.enemy-launcher.net"
+      JWT_SECRET: "CHANGE_ME"
+    volumes:
+      - enemy-data:/data
+
+volumes:
+  enemy-pg-data:
+  enemy-data:

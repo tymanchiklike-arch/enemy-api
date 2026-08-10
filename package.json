@@ -1,0 +1,16 @@
+{
+  "name": "enemy-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Серверная часть Enemy Launcher: вход, сессии и заглушки.",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.1"
+  }
+}

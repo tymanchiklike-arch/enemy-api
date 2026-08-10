@@ -1,0 +1,8 @@
+node_modules/
+enemy.db
+enemy.db-wal
+enemy.db-shm
+.env
+*.log
+npm-debug.log
+.DS_Store
