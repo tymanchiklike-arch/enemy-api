@@ -1,0 +1,6 @@
+node_modules
+enemy.db
+enemy.db-wal
+enemy.db-shm
+npm-debug.log
+.git
