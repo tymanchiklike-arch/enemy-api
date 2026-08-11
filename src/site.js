@@ -37,9 +37,10 @@ const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;600;700;800;900&family=Manrope:wght@400;500;600;700;800&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
+[id]{scroll-margin-top:96px}
 body{
   --bg:#0A0E14; --bg2:#0D1320; --panel:#111927; --line:rgba(148,163,200,.12);
-  --txt:#E8EDF6; --mut:#8CA0BF; --faint:#5C6E8C; --acc:#5ACE66; --acc2:#3EA6FF;
+  --txt:#E8EDF6; --mut:#8CA0BF; --faint:#5C6E8C; --acc:#5ACE66; --acc2:#7EDE8A;
   background:var(--bg); color:var(--txt);
   font-family:'Manrope',system-ui,-apple-system,sans-serif;
   -webkit-font-smoothing:antialiased; line-height:1.55; overflow-x:hidden;
@@ -57,7 +58,7 @@ img,svg{display:block}
 .bg-glow{position:fixed;inset:0;z-index:-1;pointer-events:none}
 .bg-glow::before,.bg-glow::after{content:'';position:absolute;border-radius:50%;filter:blur(90px);opacity:.5;animation:drift 18s ease-in-out infinite alternate}
 .bg-glow::before{width:520px;height:520px;left:-140px;top:-120px;background:radial-gradient(circle,rgba(90,206,102,.22),transparent 70%)}
-.bg-glow::after{width:620px;height:620px;right:-200px;top:120px;background:radial-gradient(circle,rgba(62,166,255,.2),transparent 70%);animation-delay:-9s}
+.bg-glow::after{width:620px;height:620px;right:-200px;top:120px;background:radial-gradient(circle,rgba(126,222,138,.2),transparent 70%);animation-delay:-9s}
 @keyframes drift{from{transform:translateY(0) scale(1)}to{transform:translateY(60px) scale(1.1)}}
 /* ===== Появление при скролле ===== */
 .rv{opacity:0;transform:translateY(26px);transition:opacity .7s cubic-bezier(.22,.61,.36,1),transform .7s cubic-bezier(.22,.61,.36,1)}
@@ -71,7 +72,8 @@ nav{position:sticky;top:0;z-index:30;backdrop-filter:blur(16px);-webkit-backdrop
 .nav{max-width:1120px;margin:0 auto;padding:16px 24px;display:flex;align-items:center;gap:22px}
 .brand{display:flex;align-items:center;gap:11px;font-family:'Unbounded',sans-serif;font-weight:700;font-size:17px;letter-spacing:.01em}
 .brand .ic{width:30px;height:30px;color:var(--acc)}
-.beta{font-family:'Manrope';font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;background:linear-gradient(135deg,#5ACE66,#3EA6FF);color:#07130A;padding:3px 7px;border-radius:5px;line-height:1}
+.brand .logo{width:30px;height:30px;border-radius:8px;object-fit:cover}
+.beta{font-family:'Manrope';font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;background:#05080D;color:#fff;border:1px solid #fff;padding:3px 7px;border-radius:5px;line-height:1}
 .nlinks{display:flex;gap:6px;margin-left:auto;color:var(--mut);font-size:13.5px;font-weight:600}
 .nlinks a{padding:8px 12px;border-radius:9px;transition:color .2s,background .2s}
 .nlinks a:hover{color:var(--txt);background:rgba(148,163,200,.08)}
@@ -94,7 +96,7 @@ nav{position:sticky;top:0;z-index:30;backdrop-filter:blur(16px);-webkit-backdrop
 .overline{display:inline-flex;align-items:center;gap:9px;font-family:'Unbounded';font-size:10.5px;font-weight:600;letter-spacing:.22em;color:var(--acc);border:1px solid rgba(90,206,102,.3);border-radius:99px;padding:7px 16px;background:rgba(90,206,102,.07)}
 .overline .ic{width:14px;height:14px}
 .hero h1{font-family:'Unbounded',sans-serif;font-weight:800;font-size:clamp(34px,6.2vw,64px);line-height:1.08;margin:26px 0 16px;letter-spacing:-.015em;color:#F2F6FB}
-.hero h1 em{font-style:normal;background:linear-gradient(100deg,#5ACE66 10%,#8FE89B 50%,#3EA6FF 95%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero h1 em{font-style:normal;background:linear-gradient(100deg,#5ACE66 10%,#8FE89B 50%,#E8FCEB 95%);-webkit-background-clip:text;background-clip:text;color:transparent}
 .hero p{color:var(--mut);font-size:17px;line-height:1.65;max-width:640px;margin:0 auto}
 .cta{display:flex;gap:14px;justify-content:center;margin-top:34px;flex-wrap:wrap}
 .plats{margin-top:30px;display:flex;gap:12px;justify-content:center;color:var(--faint);font-size:12.5px;font-weight:600;flex-wrap:wrap}
@@ -113,6 +115,7 @@ nav{position:sticky;top:0;z-index:30;backdrop-filter:blur(16px);-webkit-backdrop
 .ava{width:58px;height:58px;border-radius:15px;object-fit:cover;background:rgba(148,163,200,.1);border:1px solid var(--line);display:grid;place-items:center;font-family:'Unbounded';font-weight:700;font-size:22px;color:var(--acc)}
 .acc .nm{font-size:16px;font-weight:800}
 .acc .dn{color:var(--mut);font-size:13px;margin-top:2px}
+.ava .ic{width:26px;height:26px}
 input{width:100%;background:rgba(8,12,18,.7);border:1px solid var(--line);border-radius:11px;color:var(--txt);padding:13px 15px;font-size:14.5px;outline:none;font-family:inherit;transition:border-color .2s,box-shadow .2s}
 input:focus{border-color:rgba(90,206,102,.5);box-shadow:0 0 0 3px rgba(90,206,102,.12)}
 input::placeholder{color:var(--faint)}
@@ -126,14 +129,14 @@ input::placeholder{color:var(--faint)}
 .stepnum{flex:none;width:26px;height:26px;border-radius:9px;background:rgba(90,206,102,.12);color:var(--acc);display:grid;place-items:center;font-weight:800;font-size:12.5px;font-family:'Unbounded'}
 .sechead{display:flex;align-items:center;gap:14px;margin:76px 0 10px}
 .sechead h2{margin:0;font-family:'Unbounded';font-weight:700;font-size:21px;letter-spacing:-.01em}
-.sechead .bar{width:34px;height:3px;border-radius:99px;background:linear-gradient(90deg,#5ACE66,#3EA6FF)}
+.sechead .bar{width:34px;height:3px;border-radius:99px;background:linear-gradient(90deg,#5ACE66,#7EDE8A)}
 .secd{color:var(--faint);font-size:14px;margin:6px 0 0;max-width:580px}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px;margin-top:30px}
 .feat{background:linear-gradient(180deg,rgba(22,30,48,.6),rgba(17,25,39,.6));border:1px solid var(--line);border-radius:16px;padding:24px;transition:transform .25s,border-color .25s,box-shadow .25s}
 .feat:hover{transform:translateY(-4px);border-color:rgba(90,206,102,.28);box-shadow:0 14px 34px rgba(0,0,0,.35)}
-.feat .ic{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;background:rgba(90,206,102,.12);color:var(--acc);margin-bottom:16px;transition:transform .25s}
-.feat:hover .ic{transform:scale(1.08) rotate(-4deg)}
-.feat .ic svg{width:23px;height:23px}
+.feat .fic{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;background:rgba(90,206,102,.12);color:var(--acc);margin-bottom:16px;transition:transform .25s}
+.feat:hover .fic{transform:scale(1.08) rotate(-4deg)}
+.feat .fic svg{width:23px;height:23px}
 .feat b{font-size:15px;display:block;margin-bottom:7px;font-weight:800}
 .feat p{margin:0;color:var(--mut);font-size:13.5px;line-height:1.6}
 .goods{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}
@@ -169,7 +172,7 @@ ${ICONS}
 
 const NAV = ({ logged }) => `
 <nav><div class="nav">
-  <a class="brand" href="/">${ICON('ic-enemy')}Enemy<span class="beta">beta</span></a>
+  <a class="brand" href="/"><img class="logo" src="/logo.png" alt="Enemy" />Enemy<span class="beta">beta</span></a>
   <div class="nlinks">
     <a href="/#account">Аккаунт</a>
     <a href="/#launcher">Лаунчер</a>
@@ -186,7 +189,7 @@ const FOOT = `
 <footer>
   <div class="foot">
     <div>
-      <a class="brand" href="/" style="margin-bottom:0">${ICON('ic-enemy')}Enemy<span class="beta">beta</span></a>
+      <a class="brand" href="/" style="margin-bottom:0"><img class="logo" src="/logo.png" alt="Enemy" />Enemy<span class="beta">beta</span></a>
       <p class="co">Бесплатный лаунчер Minecraft: любые версии, сборки, скины, друзья и свой сервер — в одном окне. Без рекламы.</p>
     </div>
     <div><h4>Навигация</h4><nav><a href="/">Главная</a><a href="/#account">Сменить ник</a><a href="/#launcher">Вход в лаунчер</a></nav></div>
@@ -224,10 +227,10 @@ export const sitePage = ({ user }) => {
   <div class="sechead" id="features"><span class="bar"></span><h2>Один аккаунт — весь лаунчер</h2></div>
   <p class="secd">Тот же аккаунт, что на сайте: лаунчер, игра, друзья, скины и серверы вместе.</p>
   <div class="cards">
-    ${reveal(`<div class="feat"><div class="ic">${ICON('ic-palette')}</div><b>Скины и плащи</b><p>Загружай скин PNG и меряй в 3D до захода в игру. Плащи — отдельной вкладкой.</p></div>`)}
-    ${reveal(`<div class="feat"><div class="ic">${ICON('ic-users')}</div><b>Друзья и чат</b><p>Видно, кто в сети и на каком сервере. Переписка и приглашение прямо из лаунчера.</p></div>`, 1)}
-    ${reveal(`<div class="feat"><div class="ic">${ICON('ic-server')}</div><b>Свой сервер</b><p>Запуск и остановка хостинга, файлы, бэкапы и консоль — не выходя из лаунчера.</p></div>`, 2)}
-    ${reveal(`<div class="feat"><div class="ic">${ICON('ic-music')}</div><b>Музыка и обои</b><p>Фоновая музыка, живые обои и тёмная тема. Окно — как ты хочешь.</p></div>`, 3)}
+    ${reveal(`<div class="feat"><div class="fic">${ICON('ic-palette')}</div><b>Скины и плащи</b><p>Загружай скин PNG и меряй в 3D до захода в игру. Плащи — отдельной вкладкой.</p></div>`)}
+    ${reveal(`<div class="feat"><div class="fic">${ICON('ic-users')}</div><b>Друзья и чат</b><p>Видно, кто в сети и на каком сервере. Переписка и приглашение прямо из лаунчера.</p></div>`, 1)}
+    ${reveal(`<div class="feat"><div class="fic">${ICON('ic-server')}</div><b>Свой сервер</b><p>Запуск и остановка хостинга, файлы, бэкапы и консоль — не выходя из лаунчера.</p></div>`, 2)}
+    ${reveal(`<div class="feat"><div class="fic">${ICON('ic-music')}</div><b>Музыка и обои</b><p>Фоновая музыка, живые обои и тёмная тема. Окно — как ты хочешь.</p></div>`, 3)}
   </div>
   <div class="sechead"><span class="bar"></span><h2>Безопасно — это можно проверить</h2></div>
   <p class="secd">Лаунчеру ты отдаёшь свои файлы игры. Поэтому ничего не скрываем.</p>
