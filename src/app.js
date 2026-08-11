@@ -616,7 +616,7 @@ app.get(YGG_BASE + '/csl/:nick', ah(async (req, res) => {
     if (skin.slim) skins.slim = skin.hash
     else skins.default = skin.hash
   }
-  if (cape) capes.millida = cape.hash
+  if (cape) capes.enemy = cape.hash
   res.json({ skins, capes })
 }))
 

@@ -47,8 +47,8 @@ DATABASE_URL=postgres://postgres:enemy@localhost:5432/enemy npm start
 ENEMY_API=http://localhost:8787/v2 ./enemy-launcher.exe
 ```
 
-Либо захардкодить: заменить константу `MILLIDA_API` в
-`src-tauri/src/engine/accounts/millida.rs:4` на нужный адрес и пересобрать
+Либо захардкодить: заменить константу `ENEMY_API` в
+`src-tauri/src/engine/accounts/enemy.rs:4` на нужный адрес и пересобрать
 (`bun run build:fast`).
 
 ## Как проверить вход целиком
@@ -117,7 +117,7 @@ ENEMY_API=http://localhost:8787/v2 ./enemy-launcher.exe
 ENEMY_API=https://enemy-api.vercel.app/v2 ./enemy-launcher.exe
 ```
 
-или захардкодь адрес в `src-tauri/src/engine/accounts/millida.rs` и пересобери
+или захардкодь адрес в `src-tauri/src/engine/accounts/enemy.rs` и пересобери
 (`bun run build:fast`).
 
 ## Альтернатива: полностью свой сервер (Docker)
