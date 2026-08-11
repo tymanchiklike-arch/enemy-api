@@ -41,7 +41,12 @@ try {
   }
 } catch {}
 
+// Публичный базовый URL сайта. На Vercel его всегда видно из запроса (протокол
+// и Host), поэтому URL текстур/ссылок возвращаются в том хосте, к которому
+// обращается лаунчер или браузер. Внешний PUBLIC_BASE нужен только локально.
 const PUBLIC_BASE = process.env.PUBLIC_BASE || 'http://localhost:8787'
+const hostBase = (req) =>
+  (process.env.PUBLIC_BASE || (req.secure || (req.headers['x-forwarded-proto'] || '').includes('https') ? 'https' : 'http') + '://' + req.get('host')).replace(/\/$/, '')
 // The Discord client ID is public; only the secret is a secret.
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || '1536058209532510259'
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || ''
@@ -154,7 +159,7 @@ app.post('/v2/auth/launcher/init', ah(async (req, res) => {
   res.json({
     deviceCode,
     userCode: code,
-    verifyUrl: PUBLIC_BASE + '/v2/auth/launcher/approve?device_code=' + deviceCode,
+    verifyUrl: hostBase(req) + '/v2/auth/launcher/approve?device_code=' + deviceCode,
     expiresInSec: EXPIRE_S,
     intervalSec: INTERVAL_S,
   })
@@ -171,7 +176,7 @@ app.get(SITE_PAGE, (req, res) => {
     client_id: DISCORD_CLIENT_ID,
     response_type: 'code',
     scope: 'identify',
-    redirect_uri: PUBLIC_BASE + '/v2/auth/discord/callback',
+    redirect_uri: hostBase(req) + '/v2/auth/discord/callback',
     state: redirect,
   })
   res.redirect('https://discord.com/oauth2/authorize?' + params.toString())
@@ -189,7 +194,7 @@ app.get('/v2/auth/discord/callback', ah(async (req, res) => {
       client_secret: DISCORD_CLIENT_SECRET,
       grant_type: 'authorization_code',
       code,
-      redirect_uri: PUBLIC_BASE + '/v2/auth/discord/callback',
+      redirect_uri: hostBase(req) + '/v2/auth/discord/callback',
     }),
   })
   const token = await tokenRes.json().catch(() => ({}))
@@ -286,7 +291,7 @@ app.post('/v2/admin/set-nick', ah(async (req, res) => {
   if (!adminOk(req)) return res.status(401).json({ message: 'нет доступа' })
   const id = Number(req.body && req.body.id)
   const nick = normalizeNick(req.body && req.body.nickname)
-  if (!id || nick.length < 3 || !NICK_RE.test(nick)) return res.status(400).json({ message: 'ник не подходит' })
+  if (!id || nick.length < 2 || !NICK_RE.test(nick)) return res.status(400).json({ message: 'ник не подходит' })
   try {
     await query('UPDATE users SET nickname = $1 WHERE id = $2', [nick, id])
   } catch (err) {
@@ -423,7 +428,7 @@ app.post('/v2/launcher/game-session', requireAuth, ah(async (req, res) => {
 
 // ============ Текстуры ============
 
-const TEXTURE_BASE = PUBLIC_BASE + '/v2/yggdrasil/csl/textures/'
+const texBase = (req) => hostBase(req) + '/v2/yggdrasil/csl/textures/'
 
 const decodePng = (pngBase64) => {
   if (!pngBase64) return null
@@ -456,8 +461,8 @@ app.get('/v2/launcher/game-profile', requireAuth, ah(async (req, res) => {
       uuid.slice(0, 8) + '-' + uuid.slice(8, 12) + '-' + uuid.slice(12, 16) + '-' + uuid.slice(16, 20) + '-' + uuid.slice(20, 32),
     name: user.nickname,
     model: skin && skin.slim ? 'slim' : 'default',
-    skinUrl: skin ? TEXTURE_BASE + skin.hash : null,
-    capeUrl: cape ? TEXTURE_BASE + cape.hash : null,
+    skinUrl: skin ? texBase(req) + skin.hash : null,
+    capeUrl: cape ? texBase(req) + cape.hash : null,
   })
 }))
 
@@ -471,15 +476,15 @@ app.get('/v2/users/me', requireAuth, ah(async (req, res) => {
   })
 }))
 
-const NICK_RE = /^[\p{L}\p{N} _\-.+@#]{3,20}$/u
+const NICK_RE = /^[\p{L}\p{N}\p{P}\p{S} ]{2,20}$/u
 const normalizeNick = (s) => String(s || '').trim().replace(/\s+/g, ' ').slice(0, 20)
 
 /// Смена ника работает и из лаунчера (Bearer), и с сайта (сессия).
 /// Дубли ников запрещены (в т.ч. с разным регистром) уникальным индексом в БД.
 app.patch('/v2/users/me', requireAuth, ah(async (req, res) => {
   const nick = normalizeNick(req.body && req.body.nickname)
-  if (nick.length < 3 || !NICK_RE.test(nick)) {
-    return res.status(400).json({ message: 'Ник 3–20 символов: буквы, цифры, _, -, ., пробел, +, @ или #' })
+  if (nick.length < 2 || !NICK_RE.test(nick)) {
+    return res.status(400).json({ message: 'Ник — 2–20 символов. Можно буквы любого языка, цифры и символы' })
   }
   const { rows: taken } = await query(
     'SELECT id FROM users WHERE LOWER(nickname) = LOWER($1) AND id <> $2 LIMIT 1',
@@ -525,11 +530,11 @@ app.delete('/v2/core/blocks/:blockedId', requireAuth, (req, res) => res.json({})
 
 // ============ Гардероб и скины ============
 
-const wardItem = (t) => ({
+const wardItem = (t, req) => ({
   id: String(t.id),
   kind: t.kind,
   name: t.name,
-  url: TEXTURE_BASE + t.hash,
+  url: texBase(req) + t.hash,
   model: t.slim ? 'slim' : 'default',
   source: t.source,
   createdAt: String(t.created_at),
@@ -553,8 +558,8 @@ app.post('/v2/launcher/game-texture', requireAuth, ah(async (req, res) => {
   await setActiveTexture(req.userId, kind, tex.id)
   const { skin, cape } = await activeTextures(req.userId)
   res.json({
-    skinUrl: skin ? TEXTURE_BASE + skin.hash : null,
-    capeUrl: cape ? TEXTURE_BASE + cape.hash : null,
+    skinUrl: skin ? texBase(req) + skin.hash : null,
+    capeUrl: cape ? texBase(req) + cape.hash : null,
     model: skin && skin.slim ? 'slim' : 'default',
   })
 }))
@@ -565,10 +570,10 @@ app.get('/v2/launcher/wardrobe', requireAuth, ah(async (req, res) => {
   const items = await listTextures(req.userId)
   const { skin, cape } = await activeTextures(req.userId)
   res.json({
-    items: items.map(wardItem),
+    items: items.map((t) => wardItem(t, req)),
     active: {
-      skinUrl: skin ? TEXTURE_BASE + skin.hash : null,
-      capeUrl: cape ? TEXTURE_BASE + cape.hash : null,
+      skinUrl: skin ? texBase(req) + skin.hash : null,
+      capeUrl: cape ? texBase(req) + cape.hash : null,
       model: skin && skin.slim ? 'slim' : 'default',
     },
   })
@@ -589,7 +594,7 @@ app.post('/v2/launcher/wardrobe', requireAuth, ah(async (req, res) => {
     active: false,
     source: body.source || 'custom',
   })
-  res.status(201).json(wardItem(tex))
+  res.status(201).json(wardItem(tex, req))
 }))
 
 app.post('/v2/launcher/wardrobe/:id/apply', requireAuth, ah(async (req, res) => {
@@ -598,8 +603,8 @@ app.post('/v2/launcher/wardrobe/:id/apply', requireAuth, ah(async (req, res) => 
   await setActiveTexture(req.userId, tex.kind, tex.id)
   const { skin, cape } = await activeTextures(req.userId)
   res.json({
-    skinUrl: skin ? TEXTURE_BASE + skin.hash : null,
-    capeUrl: cape ? TEXTURE_BASE + cape.hash : null,
+    skinUrl: skin ? texBase(req) + skin.hash : null,
+    capeUrl: cape ? texBase(req) + cape.hash : null,
     model: skin && skin.slim ? 'slim' : 'default',
   })
 }))
@@ -821,12 +826,12 @@ const yggMeta = () => ({
   },
 })
 
-const yggProfile = async (user) => {
+const yggProfile = async (user, req) => {
   const uuid = uuidFromId(user.id)
   const { skin, cape } = await activeTextures(user.id)
   const textureMap = {}
-  if (skin) textureMap.SKIN = { url: TEXTURE_BASE + skin.hash, metadata: { model: skin.slim ? 'slim' : 'default' } }
-  if (cape) textureMap.CAPE = { url: TEXTURE_BASE + cape.hash }
+  if (skin) textureMap.SKIN = { url: texBase(req) + skin.hash, metadata: { model: skin.slim ? 'slim' : 'default' } }
+  if (cape) textureMap.CAPE = { url: texBase(req) + cape.hash }
   const textures = {
     timestamp: Date.now(),
     profileId: uuid,
@@ -881,7 +886,7 @@ app.get(YGG_BASE + '/sessionserver/session/minecraft/profile/:uuid', async (req,
   const user = await bearerUser(req)
   if (!user) return yggForbidden(res)
   if (uuidFromId(user.id) !== req.params.uuid) return res.sendStatus(404)
-  res.json(await yggProfile(user))
+  res.json(await yggProfile(user, req))
 })
 
 // ============ CustomSkinLoader ============
