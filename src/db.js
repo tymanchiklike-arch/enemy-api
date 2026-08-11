@@ -54,7 +54,8 @@ const ensureSchema = () => {
         user_id    BIGINT NOT NULL,
         created_at BIGINT NOT NULL
       );
-      CREATE UNIQUE INDEX IF NOT EXISTS users_discord_id_idx ON users (discord_id) WHERE discord_id IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS users_discord_id_key ON users (discord_id);
+      DROP INDEX IF EXISTS users_discord_id_idx;
 
       CREATE TABLE IF NOT EXISTS refresh_tokens (
         user_id    BIGINT NOT NULL,
