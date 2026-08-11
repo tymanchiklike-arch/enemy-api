@@ -56,6 +56,7 @@ const ensureSchema = () => {
       );
       CREATE UNIQUE INDEX IF NOT EXISTS users_discord_id_key ON users (discord_id);
       DROP INDEX IF EXISTS users_discord_id_idx;
+      CREATE UNIQUE INDEX IF NOT EXISTS users_nick_lower_key ON users (LOWER(nickname));
 
       CREATE TABLE IF NOT EXISTS refresh_tokens (
         user_id    BIGINT NOT NULL,
@@ -104,16 +105,26 @@ export const query = async (text, params) => {
 export const sha256 = (s) => createHash('sha256').update(s).digest('hex')
 export const randomToken = () => randomBytes(32).toString('hex')
 
+// The nickname uniqueness constraint (lowercase index) can collide even for
+// auto-generated names, so inserts retry with a fresh name a few times.
+const isUniqueViolation = (err) => err && (err.code === '23505' || /duplicate key/.test(String(err && err.message)))
+
 export const uuidFromId = (id) =>
   createHash('md5').update('enemy:' + id).digest('hex')
 
 export const newUser = async (nickname, email = null) => {
-  const nick = nickname || 'Player' + Math.floor(1000 + Math.random() * 8999)
-  const { rows } = await query(
-    'INSERT INTO users (email, nickname) VALUES ($1, $2) RETURNING *',
-    [email, nick],
-  )
-  return rows[0]
+  for (let attempt = 0; ; attempt++) {
+    const nick = nickname || 'Player' + Math.floor(1000 + Math.random() * 8999)
+    try {
+      const { rows } = await query(
+        'INSERT INTO users (email, nickname) VALUES ($1, $2) RETURNING *',
+        [email, nick],
+      )
+      return rows[0]
+    } catch (err) {
+      if (!nickname || attempt >= 4 || !isUniqueViolation(err)) throw err
+    }
+  }
 }
 
 export const storeRefresh = async (userId) => {
@@ -200,16 +211,22 @@ export const getUserByNick = async (nickname) => {
 /// Регистрация/вход через Discord: создаёт аккаунт при первом входе или
 /// обновляет данные профиля Discord у уже существующего.
 export const upsertByDiscord = async ({ discordId, username, avatar }) => {
-  const { rows } = await query(
-    `INSERT INTO users (discord_id, discord_username, discord_avatar, nickname, created_at)
-     VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT (discord_id) DO UPDATE
-       SET discord_username = EXCLUDED.discord_username,
-           discord_avatar   = EXCLUDED.discord_avatar
-     RETURNING *`,
-    [discordId, username, avatar, 'Player' + Math.floor(1000 + Math.random() * 8999), Date.now()],
-  )
-  return rows[0]
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const { rows } = await query(
+        `INSERT INTO users (discord_id, discord_username, discord_avatar, nickname, created_at)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (discord_id) DO UPDATE
+           SET discord_username = EXCLUDED.discord_username,
+               discord_avatar   = EXCLUDED.discord_avatar
+         RETURNING *`,
+        [discordId, username, avatar, 'Player' + Math.floor(1000 + Math.random() * 8999), Date.now()],
+      )
+      return rows[0]
+    } catch (err) {
+      if (attempt >= 4 || !isUniqueViolation(err)) throw err
+    }
+  }
 }
 
 export const storeSiteSession = async (userId) => {

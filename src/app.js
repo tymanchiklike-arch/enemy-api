@@ -1,5 +1,8 @@
 import express from 'express'
-import { randomBytes, createHash } from 'node:crypto'
+import { randomBytes, createHash, createHmac } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   query,
   newUser,
@@ -23,16 +26,15 @@ import {
   bindDeviceUser,
 } from './db.js'
 import { requireAuth, setSessionReader, signAccess, verifyAccess } from './auth.js'
-import { approvePage, errorPage, sitePage } from './site.js'
+import { adminPage, approvePage, errorPage, sitePage } from './site.js'
+
+const SRC_DIR = dirname(fileURLToPath(import.meta.url))
+const APP_ROOT = join(SRC_DIR, '..')
 
 // Dev convenience: reads a git-ignored .env next to package.json so the Discord
 // secret never lives in the repo. Production secrets come from the platform.
 try {
-  const { readFileSync } = await import('node:fs')
-  const { dirname, join } = await import('node:path')
-  const { fileURLToPath } = await import('node:url')
-  const dir = dirname(fileURLToPath(import.meta.url))
-  const text = readFileSync(join(dir, '..', '.env'), 'utf8')
+  const text = readFileSync(join(APP_ROOT, '.env'), 'utf8')
   for (const line of text.split('\n')) {
     const m = /^\s*([A-Za-z0-9_]+)\s*=\s*(.*?)\s*$/.exec(line)
     if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim()
@@ -43,6 +45,7 @@ const PUBLIC_BASE = process.env.PUBLIC_BASE || 'http://localhost:8787'
 // The Discord client ID is public; only the secret is a secret.
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || '1536058209532510259'
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || ''
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'endertyma2001'
 const INTERVAL_S = 3
 const EXPIRE_S = 300
 
@@ -100,6 +103,43 @@ const userCode = () => {
 }
 
 app.get('/v2/health', (req, res) => res.json({ ok: true }))
+
+// ============ Лого и статика ============
+
+app.get('/logo.png', (req, res) => {
+  res.set('Content-Type', 'image/png').send(readFileSync(join(APP_ROOT, 'enemy-logo.png')))
+})
+app.get('/logo.svg', (req, res) => {
+  res.set('Content-Type', 'image/svg+xml').send(readFileSync(join(APP_ROOT, 'enemy-logo.svg')))
+})
+
+// ============ Аватар по лицензии Mojang ============
+
+const MC_CACHE = new Map()
+const mcUuidForName = async (name) => {
+  const key = String(name || '').trim().toLowerCase()
+  if (MC_CACHE.has(key)) return MC_CACHE.get(key)
+  let uuid = null
+  try {
+    const r = await fetch('https://api.mojang.com/users/profiles/minecraft/' + encodeURIComponent(key), {
+      signal: AbortSignal.timeout(4000),
+    })
+    if (r.ok) {
+      const j = await r.json().catch(() => null)
+      uuid = j && j.id ? String(j.id).toLowerCase() : null
+    }
+  } catch {}
+  MC_CACHE.set(key, uuid)
+  return uuid
+}
+const mcHeadUrl = (uuid) => (uuid ? 'https://mc-heads.net/avatar/' + uuid + '/64' : null)
+
+// Голова лицензии для ника: если ник совпал с лицензионным аккаунтом Minecraft,
+// показываем его скин-голову, иначе обычный аватар (Discord).
+const avatarForUser = async (user) => {
+  const uuid = await mcUuidForName(user.nickname)
+  return (uuid && mcHeadUrl(uuid)) || user.discord_avatar || null
+}
 
 // ============ Вход (device-code) ============
 
@@ -189,6 +229,79 @@ app.post('/logout', ah(async (req, res) => {
   await dropSiteSession(readCookie(req, SESSION_COOKIE))
   clearSessionCookie(res)
   res.redirect('/')
+}))
+
+// ============ Админ-панель /admin ============
+
+const ADMIN_COOKIE = 'admin'
+const ADMIN_TTL_MS = 12 * 60 * 60 * 1000
+const adminToken = () => {
+  const payload = Buffer.from('admin:' + (Date.now() + ADMIN_TTL_MS)).toString('base64url')
+  const sig = createHmac('sha256', ADMIN_PASSWORD).update(payload).digest('base64url')
+  return payload + '.' + sig
+}
+const adminOk = (req) => {
+  const c = readCookie(req, ADMIN_COOKIE)
+  if (!c) return false
+  const i = c.indexOf('.')
+  if (i <= 0) return false
+  const p = c.slice(0, i)
+  const s = c.slice(i + 1)
+  const expected = createHmac('sha256', ADMIN_PASSWORD).update(p).digest('base64url')
+  const t = Number(Buffer.from(p, 'base64url').toString())
+  return s === expected && t > Date.now()
+}
+const setAdminCookie = (res) =>
+  res.set('Set-Cookie', `${ADMIN_COOKIE}=${adminToken()}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ADMIN_TTL_MS / 1000}`)
+const clearAdminCookie = (res) =>
+  res.set('Set-Cookie', `${ADMIN_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`)
+
+app.get('/admin', (req, res) => {
+  res
+    .set('Content-Type', 'text/html; charset=utf-8')
+    .send(adminPage({ authed: adminOk(req), passwordSet: Boolean(process.env.ADMIN_PASSWORD) }))
+})
+
+app.post('/admin', express.urlencoded({ extended: false }), (req, res) => {
+  if (typeof req.body.password === 'string' && req.body.password === ADMIN_PASSWORD) {
+    setAdminCookie(res)
+  }
+  res.redirect('/admin')
+})
+
+app.get('/admin/logout', (req, res) => {
+  clearAdminCookie(res)
+  res.redirect('/')
+})
+
+app.get('/v2/admin/users', ah(async (req, res) => {
+  if (!adminOk(req)) return res.status(401).json({ message: 'нет доступа' })
+  const { rows } = await query(
+    'SELECT id, nickname, discord_id, discord_username, email, created_at FROM users ORDER BY created_at DESC LIMIT 500',
+  )
+  res.json({ users: rows })
+}))
+
+app.post('/v2/admin/set-nick', ah(async (req, res) => {
+  if (!adminOk(req)) return res.status(401).json({ message: 'нет доступа' })
+  const id = Number(req.body && req.body.id)
+  const nick = normalizeNick(req.body && req.body.nickname)
+  if (!id || nick.length < 3 || !NICK_RE.test(nick)) return res.status(400).json({ message: 'ник не подходит' })
+  try {
+    await query('UPDATE users SET nickname = $1 WHERE id = $2', [nick, id])
+  } catch (err) {
+    if (String(err && err.code) === '23505') return res.status(409).json({ message: 'Этот ник уже занят' })
+    throw err
+  }
+  res.json({ ok: true })
+}))
+
+app.post('/v2/admin/delete-user', ah(async (req, res) => {
+  if (!adminOk(req)) return res.status(401).json({ message: 'нет доступа' })
+  const id = Number(req.body && req.body.id)
+  if (!id) return res.status(400).json({ message: 'нет id' })
+  await query('DELETE FROM users WHERE id = $1', [id])
+  res.json({ ok: true })
 }))
 
 // ============ Подтверждение входа в лаунчер ============
@@ -354,26 +467,33 @@ app.get('/v2/users/me', requireAuth, ah(async (req, res) => {
   res.json({
     nickname: user.nickname,
     discordName: user.discord_username || null,
-    avatarUrl: user.discord_avatar || null,
+    avatarUrl: await avatarForUser(user),
   })
 }))
 
-const NICK_RE = /^[A-Za-zА-Яа-яЁё0-9 _.-]{3,20}$/
+const NICK_RE = /^[\p{L}\p{N} _\-.+@#]{3,20}$/u
 const normalizeNick = (s) => String(s || '').trim().replace(/\s+/g, ' ').slice(0, 20)
 
 /// Смена ника работает и из лаунчера (Bearer), и с сайта (сессия).
+/// Дубли ников запрещены (в т.ч. с разным регистром) уникальным индексом в БД.
 app.patch('/v2/users/me', requireAuth, ah(async (req, res) => {
   const nick = normalizeNick(req.body && req.body.nickname)
   if (nick.length < 3 || !NICK_RE.test(nick)) {
-    return res.status(400).json({ message: 'Ник 3–20 символов: буквы, цифры, _, -, точка или пробел' })
+    return res.status(400).json({ message: 'Ник 3–20 символов: буквы, цифры, _, -, ., пробел, +, @ или #' })
   }
   const { rows: taken } = await query(
-    'SELECT * FROM users WHERE LOWER(nickname) = LOWER($1) AND id <> $2 LIMIT 1',
+    'SELECT id FROM users WHERE LOWER(nickname) = LOWER($1) AND id <> $2 LIMIT 1',
     [nick, req.userId],
   )
   if (taken[0]) return res.status(409).json({ message: 'Этот ник уже занят' })
-  await query('UPDATE users SET nickname = $1 WHERE id = $2', [nick, req.userId])
-  res.json({ nickname: nick })
+  try {
+    await query('UPDATE users SET nickname = $1 WHERE id = $2', [nick, req.userId])
+  } catch (err) {
+    if (String(err && err.code) === '23505') return res.status(409).json({ message: 'Этот ник уже занят' })
+    throw err
+  }
+  const { rows } = await query('SELECT * FROM users WHERE id = $1', [req.userId])
+  res.json({ nickname: nick, avatarUrl: await avatarForUser(rows[0]) })
 }))
 
 app.post('/v2/launcher/heartbeat', requireAuth, (req, res) => res.json({}))
