@@ -439,7 +439,7 @@ export const SITE_SCRIPT = `(function () {
     var nick = document.getElementById('nick').value.trim()
     if (!nick) return msg(nickMsg, 'Введи ник')
     nickBtn.disabled = true
-    fetch('/v2/users/me', { method: 'PATCH', body: JSON.stringify({ nickname: nick }) })
+    fetch('/v2/users/me', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nickname: nick }) })
       .then(function (r) { return r.json().catch(function () { return {} }).then(function (d) {
         if (!r.ok) return msg(nickMsg, d.message || 'Не удалось сохранить ник')
         msg(nickMsg, 'Ник сохранён: ' + d.nickname, true)
@@ -458,7 +458,7 @@ export const SITE_SCRIPT = `(function () {
     if (!nickBtn && !code) return
     linkBtn.disabled = true
     msg(linkMsg, 'Проверяем код…')
-    fetch('/v2/site/launcher/link', { method: 'POST', body: JSON.stringify({ code: code }) })
+    fetch('/v2/site/launcher/link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: code }) })
       .then(function (r) { return r.json().catch(function () { return {} }).then(function (d) {
         if (!r.ok) return msg(linkMsg, d.message || 'Код не подошёл')
         msg(linkMsg, 'Готово! Возвращайся в лаунчер — вход выполнен.', true)
