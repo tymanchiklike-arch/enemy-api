@@ -8,7 +8,7 @@ const rawUrl = process.env.DATABASE_URL || 'postgres://postgres:postgres@localho
 // Supabase session-mode pooler (port 5432) caps the number of live clients and
 // leaves stale ones hanging, so we route through the transaction-mode pooler on
 // port 6543 instead, which pools connections behind a proxy.
-const DATABASE_URL = rawUrl.replace('pooler.supabase.com:5432', 'pooler.supabase.com:6543')
+const DATABASE_URL = rawUrl.replace(/([a-z0-9-]+\.)?pooler\.supabase\.com:\d+/, '$1pooler.supabase.com:6543')
 const isLocal = /localhost|127\.0\.0\.1/.test(DATABASE_URL)
 
 export const pool = new pg.Pool({
