@@ -49,12 +49,11 @@ app.get('/v2/health', (req, res) => res.json({ ok: true }))
 
 app.get('/_debug/db', ah(async (req, res) => {
   const { pool } = await import('./db.js')
-  const masked = String(process.env.DATABASE_URL || '').replace(/:[^:@/]+@/, ':***@')
   try {
     const r = await pool.query('SELECT 1 AS ok')
     res.json({ db: 'ok', envHost: new URL(String(process.env.DATABASE_URL)).host, result: r.rows })
   } catch (e) {
-    res.status(500).json({ db: 'fail', envHost: masked && new URL(masked).host, message: e.message })
+    res.status(500).json({ db: 'fail', rawEnv: process.env.DATABASE_URL, message: e.message })
   }
 }))
 
