@@ -38,6 +38,29 @@ DATABASE_URL=postgres://postgres:enemy@localhost:5432/enemy npm start
 - `PUBLIC_BASE` — внешний адрес, который уйдёт в `verifyUrl` (по умолчанию `http://localhost:8787`)
 - `JWT_SECRET` — секрет access-токенов
 - `ACCESS_TTL_S` — время жизни access-токена в секундах (по умолчанию 900)
+- `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` — приложение Discord для входа на сайт
+  (без них сайт работает, но «Войти через Discord» недоступен)
+
+## Сайт Enemy
+
+Сайт отдаётся тем же сервером по адресу `PUBLIC_BASE` (корень):
+
+- **Вход/регистрация через Discord** — `/v2/auth/discord`. Первый вход создаёт
+  аккаунт и запоминается cookie-сессией в браузере (30 дней).
+- **Смена ника** — на главной странице («Профиль»), а также
+  `PATCH /v2/users/me` из лаунчера.
+- **Вход в лаунчер** — лаунчер показывает код вида `ABCD-EFGH`; на сайте этот
+  код вводится в блок «Впустить лаунчер», и в лаунчер заходит именно тот
+  аккаунт, что сохранён в браузере.
+
+### Приложение Discord
+
+1. [Discord Developer Portal](https://discord.com/developers/applications) →
+   **New Application**.
+2. **OAuth2 → Redirects** → добавь `${PUBLIC_BASE}/v2/auth/discord/callback`.
+3. Включи scope **identify** (ставится автоматически по `scope` в запросе).
+4. Скопируй `Client ID` и `Client Secret` (кнопка **Reset** — если не видно)
+   в переменные окружения сервера.
 
 ## Как переключить лаунчер на этот сервер
 
@@ -137,13 +160,16 @@ docker compose up -d --build
 | Метод | Путь | Назначение |
 |---|---|---|
 | POST | `/v2/auth/launcher/init` | начать вход: `{deviceCode, userCode, verifyUrl, expiresInSec, intervalSec}` |
-| GET | `/v2/auth/launcher/approve` | страница подтверждения кода |
-| POST | `/v2/auth/launcher/accept` | подтвердить код |
+| GET | `/v2/auth/launcher/approve` | страница подтверждения кода (вход через Discord) |
+| POST | `/v2/auth/launcher/accept` | подтвердить код и привязать аккаунт с сайта |
+| POST | `/v2/site/launcher/link` | ввести код на сайте → привязать аккаунт из браузера |
+| POST | `/v2/auth/discord` | вход/регистрация через Discord |
 | POST | `/v2/auth/launcher/poll` | опрос: `pending` → `ok`/`denied`/`expired` |
 | POST | `/v2/auth/refresh` | `{refreshToken}` → `{accessToken}` + ротация в cookie `rt2` |
 | POST | `/v2/launcher/game-session` | сессия запуска: `{accessToken, uuid, name}` |
 | GET | `/v2/launcher/game-profile` | ник/uuid/скин для игры |
-| GET | `/v2/users/me` | профиль в оболочке |
+| GET | `/v2/users/me` | профиль в оболочке и на сайте |
+| PATCH | `/v2/users/me` | сменить ник |
 | GET | `/v2/core/wallet/me/display` | баланс (заглушка 0) |
 
 ## Заглушки
@@ -157,5 +183,4 @@ docker compose up -d --build
 - Друзья: `/friends`, `/friends/requests`, чат, presence.
 - Скины: свой yggdrasil-сервер на `{base}/v2/yggdrasil` (authlib-injector) или
   проксирование `game-profile`.
-- Настоящая регистрация: завести сайт вместо страницы подтверждения и хранить
-  почту/пароль вместо автогенерируемых пользователей.
+- Хостинг: перенести от заглушек к реальным тарифам/панели.

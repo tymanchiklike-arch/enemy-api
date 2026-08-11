@@ -35,6 +35,9 @@ const ensureSchema = () => {
         nickname   TEXT NOT NULL,
         created_at BIGINT NOT NULL DEFAULT (extract(epoch from now()))
       );
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_id TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_username TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_avatar TEXT;
 
       CREATE TABLE IF NOT EXISTS device_codes (
         device_code TEXT PRIMARY KEY,
@@ -44,6 +47,14 @@ const ensureSchema = () => {
         expires_at  BIGINT NOT NULL,
         accepted_at BIGINT
       );
+      ALTER TABLE device_codes ADD COLUMN IF NOT EXISTS user_id BIGINT;
+
+      CREATE TABLE IF NOT EXISTS site_sessions (
+        token_hash TEXT PRIMARY KEY,
+        user_id    BIGINT NOT NULL,
+        created_at BIGINT NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS users_discord_id_idx ON users (discord_id) WHERE discord_id IS NOT NULL;
 
       CREATE TABLE IF NOT EXISTS refresh_tokens (
         user_id    BIGINT NOT NULL,
@@ -181,4 +192,62 @@ export const getUserByNick = async (nickname) => {
     nickname,
   ])
   return rows[0] || null
+}
+
+// ============ Discord + сайт ============
+
+/// Регистрация/вход через Discord: создаёт аккаунт при первом входе или
+/// обновляет данные профиля Discord у уже существующего.
+export const upsertByDiscord = async ({ discordId, username, avatar }) => {
+  const { rows } = await query(
+    `INSERT INTO users (discord_id, discord_username, discord_avatar, nickname, created_at)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (discord_id) DO UPDATE
+       SET discord_username = EXCLUDED.discord_username,
+           discord_avatar   = EXCLUDED.discord_avatar
+     RETURNING *`,
+    [discordId, username, avatar, 'Player' + Math.floor(1000 + Math.random() * 8999), Date.now()],
+  )
+  return rows[0]
+}
+
+export const storeSiteSession = async (userId) => {
+  const token = randomToken()
+  await query(
+    'INSERT INTO site_sessions (token_hash, user_id, created_at) VALUES ($1, $2, $3)',
+    [sha256(token), userId, Math.floor(Date.now() / 1000)],
+  )
+  return token
+}
+
+export const siteUserByToken = async (token) => {
+  if (!token) return null
+  const { rows } = await query(
+    'SELECT u.* FROM site_sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1',
+    [sha256(token)],
+  )
+  return rows[0] || null
+}
+
+export const dropSiteSession = async (token) => {
+  if (!token) return
+  await query('DELETE FROM site_sessions WHERE token_hash = $1', [sha256(token)])
+}
+
+/// Поиск device-кода по человекочитаемому коду, который лаунчер показывает
+/// на экране (пользователь вводит его на сайте).
+export const deviceByUserCode = async (code) => {
+  const { rows } = await query(
+    'SELECT * FROM device_codes WHERE UPPER(TRIM(user_code)) = UPPER(TRIM($1)) LIMIT 1',
+    [code],
+  )
+  return rows[0] || null
+}
+
+/// Привязывает аккаунт с сайта к device-коду лаунчера: именно он и залогинится.
+export const bindDeviceUser = async (deviceCode, userId) => {
+  await query(
+    'UPDATE device_codes SET user_id = $1, status = $2, accepted_at = $3 WHERE device_code = $4',
+    [userId, 'accepted', Math.floor(Date.now() / 1000), deviceCode],
+  )
 }

@@ -13,7 +13,27 @@ export const verifyAccess = (token) => {
   }
 }
 
-export const requireAuth = (req, res, next) => {
+// The site (browser session in a cookie) is the same account universe as the
+// launcher (bearer token), so `requireAuth` also accepts a valid site session.
+// app.js wires `setSessionReader`; until then bearer-only behaviour is intact.
+export let sessionReader = null
+export const setSessionReader = (fn) => {
+  sessionReader = fn
+}
+
+export const requireAuth = async (req, res, next) => {
+  let fromSession = null
+  if (sessionReader) {
+    try {
+      fromSession = await sessionReader(req)
+    } catch (err) {
+      console.error('site session:', err && err.message)
+    }
+  }
+  if (fromSession) {
+    req.userId = Number(fromSession)
+    return next()
+  }
   const h = req.headers.authorization || ''
   const token = h.startsWith('Bearer ') ? h.slice(7) : ''
   const payload = verifyAccess(token)

@@ -15,12 +15,63 @@ import {
   deleteTexture,
   getActiveTextures,
   getUserByNick,
+  upsertByDiscord,
+  storeSiteSession,
+  siteUserByToken,
+  dropSiteSession,
+  deviceByUserCode,
+  bindDeviceUser,
 } from './db.js'
-import { requireAuth, signAccess, verifyAccess } from './auth.js'
+import { requireAuth, setSessionReader, signAccess, verifyAccess } from './auth.js'
+import { approvePage, errorPage, sitePage } from './site.js'
+
+// Dev convenience: reads a git-ignored .env next to package.json so the Discord
+// secret never lives in the repo. Production secrets come from the platform.
+try {
+  const { readFileSync } = await import('node:fs')
+  const { dirname, join } = await import('node:path')
+  const { fileURLToPath } = await import('node:url')
+  const dir = dirname(fileURLToPath(import.meta.url))
+  const text = readFileSync(join(dir, '..', '.env'), 'utf8')
+  for (const line of text.split('\n')) {
+    const m = /^\s*([A-Za-z0-9_]+)\s*=\s*(.*?)\s*$/.exec(line)
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim()
+  }
+} catch {}
 
 const PUBLIC_BASE = process.env.PUBLIC_BASE || 'http://localhost:8787'
+// The Discord client ID is public; only the secret is a secret.
+const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || '1536058209532510259'
+const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || ''
 const INTERVAL_S = 3
 const EXPIRE_S = 300
+
+// ============ Сессия сайта (cookie в браузере) ============
+
+const SESSION_COOKIE = 'site_session'
+const SESSION_TTL_S = 60 * 60 * 24 * 30
+
+const readCookie = (req, name) => {
+  const h = req.headers.cookie || ''
+  for (const part of h.split(';')) {
+    const i = part.indexOf('=')
+    if (i > 0 && part.slice(0, i).trim() === name) return part.slice(i + 1).trim()
+  }
+  return null
+}
+
+const setSessionCookie = (res, token) =>
+  res.set(
+    'Set-Cookie',
+    `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_S}`,
+  )
+const clearSessionCookie = (res) =>
+  res.set('Set-Cookie', `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`)
+
+setSessionReader(async (req) => {
+  const user = await siteUserByToken(readCookie(req, SESSION_COOKIE))
+  return user ? Number(user.id) : null
+})
 
 const ah = (fn) => (req, res) =>
   fn(req, res).catch((err) => {
@@ -31,7 +82,10 @@ const ah = (fn) => (req, res) =>
 export const app = express()
 app.use(express.json({ limit: '25mb' }))
 app.use((req, res, next) => {
-  res.set('Access-Control-Allow-Origin', '*')
+  const origin = req.headers.origin
+  if (origin) res.set('Access-Control-Allow-Origin', origin)
+  else res.set('Access-Control-Allow-Origin', '*')
+  res.set('Access-Control-Allow-Credentials', 'true')
   res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   res.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, PUT, DELETE, OPTIONS')
   if (req.method === 'OPTIONS') return res.sendStatus(204)
@@ -66,59 +120,138 @@ app.post('/v2/auth/launcher/init', ah(async (req, res) => {
   })
 }))
 
-const APPROVE_PAGE = (deviceCode, userCode) => `<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <title>Вход в Enemy Launcher</title>
-  <style>
-    body{font-family:system-ui,sans-serif;background:#08090A;color:#EDEFEE;display:grid;place-items:center;min-height:100vh;margin:0}
-    .box{background:#121418;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:28px;width:340px;text-align:center}
-    h1{font-size:18px;margin:0 0 6px}
-    .code{font-family:monospace;font-size:26px;letter-spacing:.12em;color:#3EA6FF;margin:12px 0}
-    p{color:rgba(237,239,238,.7);font-size:13px;line-height:1.5}
-    button{margin-top:14px;width:100%;padding:11px;border:0;border-radius:10px;background:#3EA6FF;color:#fff;font-size:14px;font-weight:700;cursor:pointer}
-    button:hover{filter:brightness(1.08)}
-  </style>
-</head>
-<body>
-  <form class="box" method="POST" action="/v2/auth/launcher/accept">
-    <h1>Подтверждение входа</h1>
-    <p>Войди в лаунчер с кодом</p>
-    <div class="code">${userCode}</div>
-    <input type="hidden" name="deviceCode" value="${deviceCode}" />
-    <button type="submit">Подтвердить</button>
-  </form>
-</body>
-</html>`
+// ============ Discord OAuth (сайт) ============
+
+const SITE_PAGE = '/v2/auth/discord'
+
+app.get(SITE_PAGE, (req, res) => {
+  if (!DISCORD_CLIENT_ID) return res.status(500).send('Discord OAuth не настроен (DISCORD_CLIENT_ID)')
+  const redirect = typeof req.query.redirect === 'string' && req.query.redirect.startsWith('/') ? req.query.redirect : '/'
+  const params = new URLSearchParams({
+    client_id: DISCORD_CLIENT_ID,
+    response_type: 'code',
+    scope: 'identify',
+    redirect_uri: PUBLIC_BASE + '/v2/auth/discord/callback',
+    state: redirect,
+  })
+  res.redirect('https://discord.com/oauth2/authorize?' + params.toString())
+})
+
+app.get('/v2/auth/discord/callback', ah(async (req, res) => {
+  const code = req.query.code
+  if (!code) return res.status(400).send('Не удалось войти: нет кода')
+  if (!DISCORD_CLIENT_ID || !DISCORD_CLIENT_SECRET) return res.sendStatus(500)
+  const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: DISCORD_CLIENT_ID,
+      client_secret: DISCORD_CLIENT_SECRET,
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: PUBLIC_BASE + '/v2/auth/discord/callback',
+    }),
+  })
+  const token = await tokenRes.json().catch(() => ({}))
+  if (!tokenRes.ok || !token.access_token) return res.status(400).send('Discord не принял вход. Попробуй ещё раз.')
+  const meRes = await fetch('https://discord.com/api/users/@me', {
+    headers: { Authorization: 'Bearer ' + token.access_token },
+  })
+  const me = await meRes.json().catch(() => ({}))
+  if (!meRes.ok || !me.id) return res.status(400).send('Не удалось получить профиль Discord.')
+  const avatar = me.avatar
+    ? 'https://cdn.discordapp.com/avatars/' + me.id + '/' + me.avatar + (me.avatar.startsWith('a_') ? '.gif' : '.png')
+    : null
+  const user = await upsertByDiscord({ discordId: me.id, username: me.username, avatar })
+  const session = await storeSiteSession(user.id)
+  setSessionCookie(res, session)
+  const target = typeof req.query.state === 'string' && req.query.state.startsWith('/') ? req.query.state : '/'
+  res.redirect(target)
+}))
+
+// ============ Сайт ============
+
+app.get('/', ah(async (req, res) => {
+  const user = await siteUserByToken(readCookie(req, SESSION_COOKIE))
+  res
+    .set('Content-Type', 'text/html; charset=utf-8')
+    .send(sitePage({ user: user ? { nickname: user.nickname, discordName: user.discord_username, avatarUrl: user.discord_avatar } : null }))
+}))
+
+app.get('/logout', ah(async (req, res) => {
+  await dropSiteSession(readCookie(req, SESSION_COOKIE))
+  clearSessionCookie(res)
+  const target = typeof req.query.redirect === 'string' && req.query.redirect.startsWith('/') ? req.query.redirect : '/'
+  res.redirect(target)
+}))
+
+app.post('/logout', ah(async (req, res) => {
+  await dropSiteSession(readCookie(req, SESSION_COOKIE))
+  clearSessionCookie(res)
+  res.redirect('/')
+}))
+
+// ============ Подтверждение входа в лаунчер ============
 
 app.get('/v2/auth/launcher/approve', ah(async (req, res) => {
   const { rows } = await query('SELECT * FROM device_codes WHERE device_code = $1', [
     req.query.device_code,
   ])
   const row = rows[0]
-  if (!row || row.expires_at < Math.floor(Date.now() / 1000)) {
-    return res.status(404).send('Код не найден или истёк')
+  const now = Math.floor(Date.now() / 1000)
+  if (!row || row.expires_at < now) {
+    return res.set('Content-Type', 'text/html; charset=utf-8').send(errorPage('Код не найден', 'Код из лаунчера истёк или уже недействителен. Вернись в лаунчер и начни вход заново.'))
   }
-  if (row.status === 'denied') return res.status(400).send('Вход отклонён')
-  if (row.status === 'accepted') return res.status(200).send('Код уже подтверждён — возвращайся в лаунчер')
-  res.set('Content-Type', 'text/html').send(APPROVE_PAGE(row.device_code, row.user_code))
+  if (row.status === 'denied') {
+    return res.set('Content-Type', 'text/html; charset=utf-8').send(errorPage('Вход отклонён', 'Ты сам отклонил этот вход в лаунчер.'))
+  }
+  const user = await siteUserByToken(readCookie(req, SESSION_COOKIE))
+  if (!user) {
+    const back = encodeURIComponent('/v2/auth/launcher/approve?device_code=' + req.query.device_code)
+    return res.redirect(SITE_PAGE + '?redirect=' + back)
+  }
+  res
+    .set('Content-Type', 'text/html; charset=utf-8')
+    .send(approvePage({
+      user: { nickname: user.nickname, discordName: user.discord_username, avatarUrl: user.discord_avatar },
+      deviceCode: row.device_code,
+      userCode: row.user_code,
+    }))
 }))
 
 app.post('/v2/auth/launcher/accept', express.urlencoded({ extended: false }), ah(async (req, res) => {
+  const ru = () => res.set('Content-Type', 'text/html; charset=utf-8')
   const { rows } = await query('SELECT * FROM device_codes WHERE device_code = $1', [
     req.body.deviceCode,
   ])
   const row = rows[0]
   if (!row || row.expires_at < Math.floor(Date.now() / 1000)) {
-    return res.status(404).send('Код не найден или истёк')
+    return ru().send(errorPage('Код не найден', 'Код из лаунчера истёк или уже недействителен.'))
   }
-  await query('UPDATE device_codes SET status = $1, accepted_at = $2 WHERE device_code = $3', [
-    'accepted',
-    Math.floor(Date.now() / 1000),
-    row.device_code,
-  ])
-  res.set('Content-Type', 'text/html').send('Готово! Возвращайся в лаунчер.')
+  const user = await siteUserByToken(readCookie(req, SESSION_COOKIE))
+  if (!user) {
+    const back = encodeURIComponent('/v2/auth/launcher/approve?device_code=' + row.device_code)
+    return res.redirect(SITE_PAGE + '?redirect=' + back)
+  }
+  await bindDeviceUser(row.device_code, user.id)
+  ru().send(`<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Готово</title></head>
+<body style="background:#08090A;color:#EDEFEE;font-family:system-ui;display:grid;place-items:center;min-height:100vh;margin:0">
+<div style="text-align:center;max-width:400px"><h2>Готово!</h2>
+<p style="color:rgba(237,239,238,.7)">Возвращайся в лаунчер — под ником ${user.nickname.replace(/[<>&"]/g, '')} ты вошёл.</p>
+<a href="/" style="color:#3EA6FF">Открыть сайт</a></div></body></html>`)
+}))
+
+/// Ввод кода на самом сайте (а не только переход по ссылке из лаунчера).
+app.post('/v2/site/launcher/link', requireAuth, ah(async (req, res) => {
+  const raw = String((req.body && req.body.code) || '').trim().replace(/\s+/g, '')
+  if (!raw) return res.status(400).json({ message: 'Введи код из лаунчера' })
+  const row = await deviceByUserCode(raw)
+  const now = Math.floor(Date.now() / 1000)
+  if (!row || row.expires_at < now) return res.status(404).json({ message: 'Код не найден или истёк — начни вход в лаунчере заново' })
+  if (row.status === 'denied') return res.status(400).json({ message: 'Этот вход отклонён' })
+  if (row.status === 'accepted') return res.json({ ok: true })
+  await bindDeviceUser(row.device_code, req.userId)
+  res.json({ ok: true })
 }))
 
 app.post('/v2/auth/launcher/poll', ah(async (req, res) => {
@@ -135,7 +268,12 @@ app.post('/v2/auth/launcher/poll', ah(async (req, res) => {
   if (row.status === 'denied') return res.json({ status: 'denied' })
   if (row.status !== 'accepted') return res.json({ status: 'pending' })
 
-  const user = await newUser(null)
+  let user = null
+  if (row.user_id) {
+    const { rows: users } = await query('SELECT * FROM users WHERE id = $1', [row.user_id])
+    user = users[0] || null
+  }
+  if (!user) user = await newUser(null)
   const accessToken = signAccess(user.id)
   const refreshToken = await storeRefresh(user.id)
   res.json({
@@ -213,7 +351,29 @@ app.get('/v2/launcher/game-profile', requireAuth, ah(async (req, res) => {
 app.get('/v2/users/me', requireAuth, ah(async (req, res) => {
   const { rows } = await query('SELECT * FROM users WHERE id = $1', [req.userId])
   const user = rows[0]
-  res.json({ nickname: user.nickname, avatarUrl: null })
+  res.json({
+    nickname: user.nickname,
+    discordName: user.discord_username || null,
+    avatarUrl: user.discord_avatar || null,
+  })
+}))
+
+const NICK_RE = /^[A-Za-zА-Яа-яЁё0-9 _.-]{3,20}$/
+const normalizeNick = (s) => String(s || '').trim().replace(/\s+/g, ' ').slice(0, 20)
+
+/// Смена ника работает и из лаунчера (Bearer), и с сайта (сессия).
+app.patch('/v2/users/me', requireAuth, ah(async (req, res) => {
+  const nick = normalizeNick(req.body && req.body.nickname)
+  if (nick.length < 3 || !NICK_RE.test(nick)) {
+    return res.status(400).json({ message: 'Ник 3–20 символов: буквы, цифры, _, -, точка или пробел' })
+  }
+  const { rows: taken } = await query(
+    'SELECT * FROM users WHERE LOWER(nickname) = LOWER($1) AND id <> $2 LIMIT 1',
+    [nick, req.userId],
+  )
+  if (taken[0]) return res.status(409).json({ message: 'Этот ник уже занят' })
+  await query('UPDATE users SET nickname = $1 WHERE id = $2', [nick, req.userId])
+  res.json({ nickname: nick })
 }))
 
 app.post('/v2/launcher/heartbeat', requireAuth, (req, res) => res.json({}))
