@@ -99,6 +99,52 @@ const ensureSchema = () => {
         created_at BIGINT NOT NULL,
         PRIMARY KEY (blocker_id, blocked_id)
       );
+
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id         BIGSERIAL PRIMARY KEY,
+        from_id    BIGINT NOT NULL,
+        to_id      BIGINT NOT NULL,
+        text       TEXT NOT NULL DEFAULT '',
+        attachment TEXT,
+        created_at BIGINT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS chat_messages_pair_idx ON chat_messages (from_id, to_id, created_at);
+
+      CREATE TABLE IF NOT EXISTS chat_reads (
+        user_id BIGINT NOT NULL,
+        peer_id BIGINT NOT NULL,
+        read_at  BIGINT NOT NULL,
+        PRIMARY KEY (user_id, peer_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS presence (
+        user_id   BIGINT PRIMARY KEY,
+        status    TEXT NOT NULL DEFAULT 'lobby',
+        server    TEXT,
+        server_ip TEXT,
+        build     TEXT,
+        seen_at   BIGINT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS chat_typing (
+        user_id  BIGINT NOT NULL,
+        peer_id  BIGINT NOT NULL,
+        typed_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, peer_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS play_stats (
+        user_id         BIGINT PRIMARY KEY,
+        total_seconds   BIGINT NOT NULL DEFAULT 0,
+        sessions        BIGINT NOT NULL DEFAULT 0,
+        last_build      TEXT,
+        last_server     TEXT,
+        last_server_name TEXT,
+        last_played_at  BIGINT,
+        builds          TEXT NOT NULL DEFAULT '[]',
+        servers         TEXT NOT NULL DEFAULT '[]',
+        hidden          BOOLEAN NOT NULL DEFAULT false
+      );
       `,
       )
       .catch((err) => {
@@ -227,6 +273,167 @@ export const getUserByNick = async (nickname) => {
     nickname,
   ])
   return rows[0] || null
+}
+
+// ============ Чат и присутствие ============
+
+export const saveMessage = async ({ fromId, toId, text, attachment }) => {
+  const { rows } = await query(
+    'INSERT INTO chat_messages (from_id, to_id, text, attachment, created_at) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+    [fromId, toId, text || '', attachment ? JSON.stringify(attachment) : null, Date.now()],
+  )
+  return rows[0]
+}
+
+export const chatPage = async (a, b, before) => {
+  const { rows } = await query(
+    `SELECT * FROM chat_messages
+     WHERE ((from_id = $1 AND to_id = $2) OR (from_id = $2 AND to_id = $1))
+       AND ($3::bigint IS NULL OR created_at < $3)
+     ORDER BY created_at DESC LIMIT 50`,
+    [a, b, before || null],
+  )
+  return rows.reverse()
+}
+
+export const newIncomingMessages = async (userId, friendIds, since) => {
+  if (!friendIds.length) return []
+  const { rows } = await query(
+    `SELECT * FROM chat_messages
+     WHERE to_id = $1 AND from_id = ANY($2) AND created_at > $3
+     ORDER BY created_at ASC LIMIT 100`,
+    [userId, friendIds, since],
+  )
+  return rows
+}
+
+export const unreadCount = async (userId, peerId) => {
+  const { rows } = await query(
+    `SELECT COUNT(*)::int AS n FROM chat_messages
+     WHERE from_id = $1 AND to_id = $2 AND created_at > COALESCE(
+       (SELECT read_at FROM chat_reads WHERE user_id = $2 AND peer_id = $1), 0)`,
+    [peerId, userId],
+  )
+  return rows[0] ? rows[0].n : 0
+}
+
+export const markRead = async (userId, peerId) => {
+  await query(
+    `INSERT INTO chat_reads (user_id, peer_id, read_at) VALUES ($1,$2,$3)
+     ON CONFLICT (user_id, peer_id) DO UPDATE SET read_at = EXCLUDED.read_at`,
+    [userId, peerId, Date.now()],
+  )
+}
+
+export const peerReadAt = async (peerId, userId) => {
+  const { rows } = await query(
+    'SELECT read_at FROM chat_reads WHERE user_id = $1 AND peer_id = $2',
+    [peerId, userId],
+  )
+  return rows[0] ? rows[0].read_at : 0
+}
+
+export const setTyping = async (userId, peerId) => {
+  await query(
+    `INSERT INTO chat_typing (user_id, peer_id, typed_at) VALUES ($1,$2,$3)
+     ON CONFLICT (user_id, peer_id) DO UPDATE SET typed_at = EXCLUDED.typed_at`,
+    [userId, peerId, Date.now()],
+  )
+}
+
+export const typingPeers = async (userId, friendIds) => {
+  if (!friendIds.length) return []
+  const { rows } = await query(
+    `SELECT user_id FROM chat_typing
+     WHERE peer_id = $1 AND user_id = ANY($2) AND typed_at > $3`,
+    [userId, friendIds, Date.now() - 6000],
+  )
+  return rows.map((r) => String(r.user_id))
+}
+
+export const touchPresence = async (userId, data = {}) => {
+  await query(
+    `INSERT INTO presence (user_id, status, server, server_ip, build, seen_at)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (user_id) DO UPDATE SET
+       status = EXCLUDED.status,
+       server = EXCLUDED.server,
+       server_ip = EXCLUDED.server_ip,
+       build = EXCLUDED.build,
+       seen_at = EXCLUDED.seen_at`,
+    [
+      userId,
+      data.status || 'lobby',
+      data.server || null,
+      data.serverIp || null,
+      data.build || null,
+      Date.now(),
+    ],
+  )
+}
+
+export const presenceOf = async (userId) => {
+  const { rows } = await query('SELECT * FROM presence WHERE user_id = $1', [userId])
+  return rows[0] || null
+}
+
+/// Полл идёт каждые ~5 секунд: он только продлевает сессию, не трогая статус.
+/// Иначе регулярный опрос затирал бы «playing» своим lobby.
+export const bumpPresence = async (userId) => {
+  await query(
+    `INSERT INTO presence (user_id, status, seen_at) VALUES ($1, 'lobby', $2)
+     ON CONFLICT (user_id) DO UPDATE SET seen_at = EXCLUDED.seen_at`,
+    [userId, Date.now()],
+  )
+}
+
+export const savePlayStats = async (userId, stats) => {
+  await query(
+    `INSERT INTO play_stats
+       (user_id, total_seconds, sessions, last_build, last_server, last_server_name, last_played_at, builds, servers)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     ON CONFLICT (user_id) DO UPDATE SET
+       total_seconds = EXCLUDED.total_seconds,
+       sessions = EXCLUDED.sessions,
+       last_build = EXCLUDED.last_build,
+       last_server = EXCLUDED.last_server,
+       last_server_name = EXCLUDED.last_server_name,
+       last_played_at = EXCLUDED.last_played_at,
+       builds = EXCLUDED.builds,
+       servers = EXCLUDED.servers,
+       hidden = false`,
+    [
+      userId,
+      stats.totalSeconds || 0,
+      stats.sessions || 0,
+      stats.lastBuild || null,
+      stats.lastServer || null,
+      stats.lastServerName || null,
+      stats.lastPlayedAt || null,
+      JSON.stringify((stats.builds || []).slice(0, 10)),
+      JSON.stringify((stats.servers || []).slice(0, 10)),
+    ],
+  )
+}
+
+export const hidePlayStats = async (userId) => {
+  await query('UPDATE play_stats SET hidden = true WHERE user_id = $1', [userId])
+}
+
+export const playStatsOf = async (userId) => {
+  const { rows } = await query('SELECT * FROM play_stats WHERE user_id = $1', [userId])
+  const r = rows[0]
+  if (!r || r.hidden) return null
+  return {
+    totalSeconds: Number(r.total_seconds),
+    sessions: Number(r.sessions),
+    lastBuild: r.last_build,
+    lastServer: r.last_server,
+    lastServerName: r.last_server_name,
+    lastPlayedAt: r.last_played_at ? Number(r.last_played_at) : null,
+    builds: JSON.parse(r.builds || '[]'),
+    servers: JSON.parse(r.servers || '[]'),
+  }
 }
 
 // ============ Discord + сайт ============
