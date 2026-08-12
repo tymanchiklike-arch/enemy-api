@@ -24,6 +24,20 @@ import {
   dropSiteSession,
   deviceByUserCode,
   bindDeviceUser,
+  saveMessage,
+  chatPage,
+  newIncomingMessages,
+  unreadCount,
+  markRead,
+  peerReadAt,
+  setTyping,
+  typingPeers,
+  touchPresence,
+  presenceOf,
+  savePlayStats,
+  hidePlayStats,
+  playStatsOf,
+  bumpPresence,
 } from './db.js'
 import { requireAuth, setSessionReader, signAccess, verifyAccess } from './auth.js'
 import { adminPage, approvePage, errorPage, sitePage } from './site.js'
@@ -582,6 +596,16 @@ const wardItem = (t, req) => ({
 app.post('/v2/launcher/game-texture', requireAuth, ah(async (req, res) => {
   const body = req.body || {}
   const kind = body.type === 'cape' ? 'cape' : 'skin'
+  // null pngBase64 = снять скин/плащ (лаунчер так сбрасывает текстуру)
+  if (body.pngBase64 == null || body.pngBase64 === '') {
+    await clearActiveTexture(req.userId, kind)
+    const { skin, cape } = await activeTextures(req.userId)
+    return res.json({
+      skinUrl: skin ? texBase(req) + skin.hash : null,
+      capeUrl: cape ? texBase(req) + cape.hash : null,
+      model: skin && skin.slim ? 'slim' : 'default',
+    })
+  }
   const buf = decodePng(body.pngBase64)
   if (!buf) return res.status(400).json({ message: 'Нужен PNG-файл' })
   const hash = textureHash(buf)
@@ -661,11 +685,53 @@ app.post('/v2/launcher/rewards/:code/claim', requireAuth, (req, res) =>
 
 // ============ Друзья ============
 
+const PRESENCE_ONLINE_MS = 45000
+
 const friendRow = (user) => ({
   userId: String(user.id),
   nickname: user.nickname,
   avatarUrl: user.discord_avatar || null,
 })
+
+const rowToMsg = (row) => {
+  let attachment = null
+  if (row.attachment) {
+    try {
+      attachment = JSON.parse(row.attachment)
+    } catch {}
+  }
+  return {
+    id: String(row.id),
+    text: row.text || '',
+    ts: Number(row.created_at),
+    attachment,
+  }
+}
+
+/// Присутствие в формате Friend для списка/полла: онлайн по свежести seen_at,
+/// статус «в игре» — по полю status, unread — непрочитанные сообщения от него.
+const presenceRow = async (me, user) => {
+  const p = await presenceOf(user.id)
+  const online = !!p && Date.now() - p.seen_at < PRESENCE_ONLINE_MS
+  const playing = !!p && p.status === 'playing'
+  return {
+    ...friendRow(user),
+    online,
+    playing,
+    text: playing
+      ? p.server || p.build || 'В игре'
+      : online
+        ? 'В лаунчере'
+        : p && p.status === 'playing'
+          ? 'В игре'
+          : 'Не в сети',
+    serverIp: playing ? p.server_ip : null,
+    serverName: playing ? p.server : null,
+    build: playing ? p.build : null,
+    lastSeen: p ? p.seen_at : null,
+    unread: online ? await unreadCount(me, user.id) : 0,
+  }
+}
 
 // Возвращает список друзей текущего пользователя (обе стороны связи).
 const friendIds = async (userId) => {
@@ -682,7 +748,7 @@ app.get('/v2/friends', requireAuth, ah(async (req, res) => {
   const friends = []
   for (const id of ids) {
     const { rows } = await query('SELECT * FROM users WHERE id = $1', [id])
-    if (rows[0]) friends.push(friendRow(rows[0]))
+    if (rows[0]) friends.push(await presenceRow(req.userId, rows[0]))
   }
   res.json({ friends })
 }))
@@ -837,41 +903,85 @@ app.post('/v2/friends/block', requireAuth, ah(async (req, res) => {
 app.get('/v2/friends/profile/:uid', requireAuth, ah(async (req, res) => {
   const { rows } = await query('SELECT * FROM users WHERE id = $1', [Number(req.params.uid)])
   const u = rows[0]
+  if (!u) return res.status(404).json({ message: 'Не найден' })
+  const p = await presenceOf(u.id)
+  const online = !!p && Date.now() - p.seen_at < PRESENCE_ONLINE_MS
+  const playing = !!p && p.status === 'playing'
   res.json({
-    nick: u ? u.nickname : '',
-    nickname: u ? u.nickname : '',
-    text: u ? 'Игрок Enemy' : '',
-    online: false,
+    nick: u.nickname,
+    nickname: u.nickname,
+    text: playing ? (p.server || p.build || 'Играет') : online ? 'В лаунчере' : 'Игрок Enemy',
+    online,
+    playing,
+    serverIp: playing ? p.server_ip : null,
+    serverName: playing ? p.server : null,
+    build: playing ? p.build : null,
+    stats: await playStatsOf(u.id),
   })
 }))
 
 app.post('/v2/friends/chat/upload', requireAuth, (req, res) => {
   const body = req.body || {}
   const kind = body.kind === 'voice' ? 'voice' : 'image'
+  const mime = kind === 'voice' ? 'audio/ogg' : 'image/png'
   const name = kind === 'voice' ? 'message.ogg' : 'image.png'
-  res.json({ url: null, kind, name })
+  const b64 = String(body.dataBase64 || '')
+  const url = b64 ? 'data:' + mime + ';base64,' + b64 : null
+  // Вложения едут как data-URL внутри сообщения — сервер не держит файлы.
+  res.json({
+    url,
+    kind,
+    name,
+    ...(kind === 'voice'
+      ? { durationMs: body.durationMs || 0, peaks: Array.isArray(body.peaks) ? body.peaks : [] }
+      : {}),
+  })
 })
 
-app.get('/v2/friends/chat/:uid', requireAuth, (req, res) =>
-  res.json({ messages: [], hasMore: false, peerReadAt: null }),
-)
+app.get('/v2/friends/chat/:uid', requireAuth, ah(async (req, res) => {
+  const peer = Number(req.params.uid)
+  if (!peer) return res.status(400).json({ message: 'нет uid' })
+  const before = Number(req.query.before) || null
+  const rows = await chatPage(req.userId, peer, before)
+  res.json({
+    messages: rows.map((r) => ({ ...rowToMsg(r), me: Number(r.from_id) === req.userId })),
+    hasMore: rows.length === 50,
+    peerReadAt: (await peerReadAt(peer, req.userId)) || null,
+  })
+}))
 
-app.post('/v2/friends/chat/:uid', requireAuth, (req, res) =>
-  res.json({ id: String(Math.floor(Math.random() * 1e15)), ts: Date.now() }),
-)
+app.post('/v2/friends/chat/:uid', requireAuth, ah(async (req, res) => {
+  const peer = Number(req.params.uid)
+  if (!peer) return res.status(400).json({ message: 'нет uid' })
+  const body = req.body || {}
+  const row = await saveMessage({
+    fromId: req.userId,
+    toId: peer,
+    text: String(body.text || ''),
+    attachment: body.attachment || null,
+  })
+  res.json({ id: String(row.id), ts: Number(row.created_at) })
+}))
 
-app.post('/v2/friends/chat/:uid/read', requireAuth, (req, res) => res.json({}))
-app.post('/v2/friends/chat/:uid/typing', requireAuth, (req, res) => res.json({}))
+app.post('/v2/friends/chat/:uid/read', requireAuth, ah(async (req, res) => {
+  const peer = Number(req.params.uid)
+  if (peer) await markRead(req.userId, peer)
+  res.json({})
+}))
+
+app.post('/v2/friends/chat/:uid/typing', requireAuth, ah(async (req, res) => {
+  const peer = Number(req.params.uid)
+  if (peer) await setTyping(req.userId, peer)
+  res.json({})
+}))
 
 app.get('/v2/friends/poll', requireAuth, ah(async (req, res) => {
   const ids = await friendIds(req.userId)
+  await bumpPresence(req.userId)
   const presence = []
   for (const id of ids) {
-    const { rows } = await query('SELECT * FROM users WHERE id = $1', [id])
-    if (rows[0]) {
-      const u = rows[0]
-      presence.push({ ...friendRow(u), online: false })
-    }
+    const user = (await query('SELECT * FROM users WHERE id = $1', [id])).rows[0]
+    if (user) presence.push(await presenceRow(req.userId, user))
   }
   const inc = await query(
     `SELECT fr.id, fr.from_id, u.nickname, u.discord_avatar
@@ -886,19 +996,44 @@ app.get('/v2/friends/poll', requireAuth, ah(async (req, res) => {
     [req.userId],
   )
   const map = (r) => ({ id: String(r.id), userId: String(r.from_id || r.to_id), nickname: r.nickname, avatarUrl: r.discord_avatar || null })
+  const since = Number(req.query.since) || Date.now() - 10 * 60000
+  const byId = new Map(presence.map((p) => [Number(p.userId), p]))
+  const messages = (await newIncomingMessages(req.userId, ids, since)).map((row) => ({
+    id: String(row.id),
+    from: String(row.from_id),
+    fromNick: (byId.get(Number(row.from_id)) || {}).nickname || '',
+    ts: Number(row.created_at),
+    ...rowToMsg(row),
+  }))
+  const reads = []
+  for (const id of ids) {
+    const readAt = await peerReadAt(id, req.userId)
+    if (readAt) reads.push({ userId: String(id), readAt })
+  }
   res.json({
     now: Date.now(),
     presence,
     requests: { incoming: inc.rows.map(map), outgoing: out.rows.map(map) },
-    messages: [],
-    reads: [],
-    typing: [],
+    messages,
+    reads,
+    typing: await typingPeers(req.userId, ids),
   })
 }))
 
-app.post('/v2/friends/stats', requireAuth, (req, res) => res.json({}))
-app.post('/v2/friends/stats/hide', requireAuth, (req, res) => res.json({}))
-app.post('/v2/friends/presence/heartbeat', requireAuth, (req, res) => res.json({}))
+app.post('/v2/friends/stats', requireAuth, ah(async (req, res) => {
+  await savePlayStats(req.userId, req.body || {})
+  res.json({})
+}))
+
+app.post('/v2/friends/stats/hide', requireAuth, ah(async (req, res) => {
+  await hidePlayStats(req.userId)
+  res.json({})
+}))
+
+app.post('/v2/friends/presence/heartbeat', requireAuth, ah(async (req, res) => {
+  await touchPresence(req.userId, (req.body || {}).status ? req.body : {})
+  res.json({})
+}))
 
 // ============ Рейтинг серверов ============
 
