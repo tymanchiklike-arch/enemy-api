@@ -537,7 +537,6 @@ app.patch('/v2/users/me', requireAuth, ah(async (req, res) => {
 app.post('/v2/launcher/heartbeat', requireAuth, (req, res) => res.json({}))
 app.post('/v2/launcher/telemetry', requireAuth, (req, res) => res.json({}))
 app.get('/v2/core/wallet/me/display', requireAuth, (req, res) => res.json({ availableKopecks: 0 }))
-app.get('/v2/rating/servers', requireAuth, (req, res) => res.json({ servers: [], topThree: [], total: 0 }))
 app.get('/v2/launcher/rewards', requireAuth, (req, res) => res.json({ items: [] }))
 
 // ============ Приватность ============
@@ -729,7 +728,7 @@ const presenceRow = async (me, user) => {
     serverName: playing ? p.server : null,
     build: playing ? p.build : null,
     lastSeen: p ? p.seen_at : null,
-    unread: online ? await unreadCount(me, user.id) : 0,
+    unread: await unreadCount(me, user.id),
   }
 }
 
@@ -1037,9 +1036,45 @@ app.post('/v2/friends/presence/heartbeat', requireAuth, ah(async (req, res) => {
 
 // ============ Рейтинг серверов ============
 
-app.get('/v2/rating/servers', requireAuth, (req, res) =>
-  res.json({ servers: [], topThree: [], total: 0 }),
-)
+/// Прокси для HotMC: движок вебвью не даёт достучаться до hotmc.ru напрямую
+/// (CORS и анти-бот проверка на заголовки браузера). Качаем один раз и
+/// кешируем на 5 минут — список популярных серверов меняется медленно.
+const HOTMC_API = 'https://hotmc.ru/api/v1/servers'
+let hotmcCache = { at: 0, servers: [], total: 0 }
+const HOTMC_TTL = 5 * 60 * 1000
+
+async function fetchHotmc(category) {
+  const now = Date.now()
+  if (now - hotmcCache.at < HOTMC_TTL) return hotmcCache
+  const url = HOTMC_API + '?limit=30&sort=rating' + (category ? '&category=' + encodeURIComponent(category) : '')
+  const r = await fetch(url, {
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+      Accept: 'application/json',
+    },
+  })
+  if (!r.ok) throw new Error('hotmc http ' + r.status)
+  const d = await r.json()
+  const list = Array.isArray(d) ? d : d.servers || d.list || []
+  hotmcCache = { at: now, servers: list, total: d.total ?? list.length }
+  return hotmcCache
+}
+
+app.get('/v2/rating/servers', requireAuth, (req, res) => {
+  void (async () => {
+    if (req.query.source === 'hotmc') {
+      try {
+        const d = await fetchHotmc(String(req.query.category || ''))
+        res.json({ servers: d.servers, topThree: [], total: d.total })
+      } catch (e) {
+        res.status(502).json({ error: String(e) })
+      }
+      return
+    }
+    res.json({ servers: [], topThree: [], total: 0 })
+  })()
+})
 
 // ============ Ошибки / отчёты ============
 
