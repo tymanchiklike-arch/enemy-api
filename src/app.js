@@ -1,6 +1,6 @@
 import express from 'express'
 import { randomBytes, createHash, createHmac } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -116,6 +116,25 @@ app.get('/logo.png', (req, res) => {
 })
 app.get('/logo.svg', (req, res) => {
   res.set('Content-Type', 'image/svg+xml').send(readFileSync(join(APP_ROOT, 'enemy-logo.svg')))
+})
+
+// ============ Скачивание лаунчера ============
+
+app.get('/download', (req, res) => {
+  const exe = join(APP_ROOT, '..', 'src-tauri', 'target', 'fast', 'enemy-launcher.exe')
+  try {
+    const stat = statSync(exe)
+    res.set({
+      'Content-Type': 'application/octet-stream',
+      'Content-Length': String(stat.size),
+      'Content-Disposition': 'attachment; filename="EnemyLauncher.exe"',
+    })
+    res.send(readFileSync(exe))
+  } catch {
+    res
+      .set('Content-Type', 'text/html; charset=utf-8')
+      .send(errorPage('Файл не найден', 'Сборка лаунчера ещё не выложена. Загляни позже.'))
+  }
 })
 
 // ============ Аватар по лицензии Mojang ============
@@ -525,8 +544,28 @@ app.patch('/v2/users/me/privacy', requireAuth, (req, res) =>
 
 // ============ Блокировки ============
 
-app.get('/v2/core/blocks', requireAuth, (req, res) => res.json({ items: [] }))
-app.delete('/v2/core/blocks/:blockedId', requireAuth, (req, res) => res.json({}))
+app.get('/v2/core/blocks', requireAuth, ah(async (req, res) => {
+  const { rows } = await query(
+    `SELECT b.blocked_id, u.nickname, u.discord_avatar
+     FROM blocks b LEFT JOIN users u ON u.id = b.blocked_id
+     WHERE b.blocker_id = $1 ORDER BY b.created_at DESC`,
+    [req.userId],
+  )
+  res.json({
+    items: rows.map((r) => ({
+      blockedId: String(r.blocked_id),
+      user: { id: String(r.blocked_id), nickname: r.nickname, avatarUrl: r.discord_avatar || null },
+    })),
+  })
+}))
+
+app.delete('/v2/core/blocks/:blockedId', requireAuth, ah(async (req, res) => {
+  await query('DELETE FROM blocks WHERE blocker_id = $1 AND blocked_id = $2', [
+    req.userId,
+    Number(req.params.blockedId),
+  ])
+  res.json({})
+}))
 
 // ============ Гардероб и скины ============
 
@@ -622,24 +661,189 @@ app.post('/v2/launcher/rewards/:code/claim', requireAuth, (req, res) =>
 
 // ============ Друзья ============
 
-app.get('/v2/friends', requireAuth, (req, res) => res.json({ friends: [] }))
-app.get('/v2/friends/requests', requireAuth, (req, res) => res.json({ incoming: [], outgoing: [] }))
-
-app.get('/v2/friends/search', requireAuth, (req, res) => res.json({ results: [] }))
-
-app.post('/v2/friends/request', requireAuth, (req, res) => {
-  const r = res.json({ status: 'pending' })
-  return r
+const friendRow = (user) => ({
+  userId: String(user.id),
+  nickname: user.nickname,
+  avatarUrl: user.discord_avatar || null,
 })
-app.post('/v2/friends/accept', requireAuth, (req, res) => res.json({}))
-app.post('/v2/friends/decline', requireAuth, (req, res) => res.json({}))
-app.post('/v2/friends/cancel', requireAuth, (req, res) => res.json({}))
-app.post('/v2/friends/remove', requireAuth, (req, res) => res.json({}))
-app.post('/v2/friends/block', requireAuth, (req, res) => res.json({}))
 
-app.get('/v2/friends/profile/:uid', requireAuth, (req, res) =>
-  res.json({ nick: '', nickname: '', text: '', online: false }),
-)
+// Возвращает список друзей текущего пользователя (обе стороны связи).
+const friendIds = async (userId) => {
+  const { rows } = await query(
+    `SELECT CASE WHEN user_a = $1 THEN user_b ELSE user_a END AS id
+     FROM friendships WHERE user_a = $1 OR user_b = $1`,
+    [userId],
+  )
+  return rows.map((r) => Number(r.id))
+}
+
+app.get('/v2/friends', requireAuth, ah(async (req, res) => {
+  const ids = await friendIds(req.userId)
+  const friends = []
+  for (const id of ids) {
+    const { rows } = await query('SELECT * FROM users WHERE id = $1', [id])
+    if (rows[0]) friends.push(friendRow(rows[0]))
+  }
+  res.json({ friends })
+}))
+
+app.get('/v2/friends/requests', requireAuth, ah(async (req, res) => {
+  const inc = await query(
+    `SELECT fr.id, fr.from_id, u.nickname, u.discord_avatar
+     FROM friend_requests fr JOIN users u ON u.id = fr.from_id
+     WHERE fr.to_id = $1 AND fr.status = 'pending' ORDER BY fr.created_at DESC`,
+    [req.userId],
+  )
+  const out = await query(
+    `SELECT fr.id, fr.to_id, u.nickname, u.discord_avatar
+     FROM friend_requests fr JOIN users u ON u.id = fr.to_id
+     WHERE fr.from_id = $1 AND fr.status = 'pending' ORDER BY fr.created_at DESC`,
+    [req.userId],
+  )
+  const map = (r) => ({ id: String(r.id), userId: String(r.from_id || r.to_id), nickname: r.nickname, avatarUrl: r.discord_avatar || null })
+  res.json({ incoming: inc.rows.map(map), outgoing: out.rows.map(map) })
+}))
+
+const friendshipStatus = async (a, b) => {
+  const { rows } = await query(
+    'SELECT 1 FROM friendships WHERE (user_a = $1 AND user_b = $2) OR (user_a = $2 AND user_b = $1)',
+    [a, b],
+  )
+  return rows.length > 0
+}
+
+app.get('/v2/friends/search', requireAuth, ah(async (req, res) => {
+  const q = String(req.query.q || '').trim().toLowerCase()
+  if (q.length < 2) return res.json({ results: [] })
+  const { rows } = await query(
+    `SELECT * FROM users WHERE LOWER(nickname) LIKE $1 AND id <> $2 ORDER BY nickname LIMIT 10`,
+    ['%' + q + '%', req.userId],
+  )
+  const mine = rows
+  const results = []
+  for (const u of mine) {
+    const uid = Number(u.id)
+    const isFriend = await friendshipStatus(req.userId, uid)
+    const pending = !isFriend && (await query(
+      `SELECT 1 FROM friend_requests
+       WHERE status = 'pending'
+         AND ((from_id = $1 AND to_id = $2) OR (from_id = $2 AND to_id = $1)) LIMIT 1`,
+      [req.userId, uid],
+    )).rows.length > 0
+    results.push({
+      userId: String(uid),
+      nickname: u.nickname,
+      avatarUrl: u.discord_avatar || null,
+      isFriend,
+      pending,
+      text: 'Игрок Enemy',
+    })
+  }
+  res.json({ results })
+}))
+
+app.post('/v2/friends/request', requireAuth, ah(async (req, res) => {
+  const body = req.body || {}
+  let target = Number(body.targetId)
+  if (!target && typeof body.nickname === 'string') {
+    const { rows } = await query('SELECT id FROM users WHERE LOWER(nickname) = LOWER($1) LIMIT 1', [body.nickname.trim()])
+    target = rows[0] ? Number(rows[0].id) : 0
+  }
+  if (!target || target === req.userId) return res.status(400).json({ message: 'Пользователь не найден' })
+  if (await friendshipStatus(req.userId, target)) return res.json({ status: 'already_friends' })
+  const reverse = await query(
+    'SELECT * FROM friend_requests WHERE from_id = $1 AND to_id = $2 AND status = $3 LIMIT 1',
+    [target, req.userId, 'pending'],
+  )
+  if (reverse.rows[0]) {
+    await query(
+      'UPDATE friend_requests SET status = $1 WHERE id = $2',
+      ['accepted', reverse.rows[0].id],
+    )
+    const a = Math.min(req.userId, target)
+    const b = Math.max(req.userId, target)
+    await query(
+      'INSERT INTO friendships (user_a, user_b, created_at) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+      [a, b, Date.now()],
+    )
+    return res.json({ status: 'accepted' })
+  }
+  const existing = await query(
+    'SELECT id FROM friend_requests WHERE from_id = $1 AND to_id = $2 AND status = $3 LIMIT 1',
+    [req.userId, target, 'pending'],
+  )
+  if (existing.rows[0]) return res.json({ status: 'pending' })
+  await query(
+    'INSERT INTO friend_requests (from_id, to_id, status, created_at) VALUES ($1, $2, $3, $4)',
+    [req.userId, target, 'pending', Date.now()],
+  )
+  res.json({ status: 'pending' })
+}))
+
+app.post('/v2/friends/accept', requireAuth, ah(async (req, res) => {
+  const id = Number((req.body || {}).id)
+  const { rows } = await query(
+    'SELECT * FROM friend_requests WHERE id = $1 AND to_id = $2 AND status = $3 LIMIT 1',
+    [id, req.userId, 'pending'],
+  )
+  if (!rows[0]) return res.status(404).json({ message: 'Заявка не найдена' })
+  await query('UPDATE friend_requests SET status = $1 WHERE id = $2', ['accepted', id])
+  const a = Math.min(Number(rows[0].from_id), req.userId)
+  const b = Math.max(Number(rows[0].from_id), req.userId)
+  await query('INSERT INTO friendships (user_a, user_b, created_at) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [a, b, Date.now()])
+  res.json({})
+}))
+
+app.post('/v2/friends/decline', requireAuth, ah(async (req, res) => {
+  await query(
+    'UPDATE friend_requests SET status = $1 WHERE id = $2 AND to_id = $3',
+    ['declined', Number((req.body || {}).id), req.userId],
+  )
+  res.json({})
+}))
+
+app.post('/v2/friends/cancel', requireAuth, ah(async (req, res) => {
+  await query(
+    'UPDATE friend_requests SET status = $1 WHERE id = $2 AND from_id = $3',
+    ['cancelled', Number((req.body || {}).id), req.userId],
+  )
+  res.json({})
+}))
+
+app.post('/v2/friends/remove', requireAuth, ah(async (req, res) => {
+  const uid = Number((req.body || {}).userId)
+  if (!uid) return res.status(400).json({ message: 'нет userId' })
+  await query(
+    'DELETE FROM friendships WHERE (user_a = $1 AND user_b = $2) OR (user_a = $2 AND user_b = $1)',
+    [req.userId, uid],
+  )
+  res.json({})
+}))
+
+app.post('/v2/friends/block', requireAuth, ah(async (req, res) => {
+  const uid = Number((req.body || {}).userId)
+  if (!uid) return res.status(400).json({ message: 'нет userId' })
+  await query(
+    'DELETE FROM friendships WHERE (user_a = $1 AND user_b = $2) OR (user_a = $2 AND user_b = $1)',
+    [req.userId, uid],
+  )
+  await query(
+    'INSERT INTO blocks (blocker_id, blocked_id, created_at) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+    [req.userId, uid, Date.now()],
+  )
+  res.json({})
+}))
+
+app.get('/v2/friends/profile/:uid', requireAuth, ah(async (req, res) => {
+  const { rows } = await query('SELECT * FROM users WHERE id = $1', [Number(req.params.uid)])
+  const u = rows[0]
+  res.json({
+    nick: u ? u.nickname : '',
+    nickname: u ? u.nickname : '',
+    text: u ? 'Игрок Enemy' : '',
+    online: false,
+  })
+}))
 
 app.post('/v2/friends/chat/upload', requireAuth, (req, res) => {
   const body = req.body || {}
@@ -659,16 +863,38 @@ app.post('/v2/friends/chat/:uid', requireAuth, (req, res) =>
 app.post('/v2/friends/chat/:uid/read', requireAuth, (req, res) => res.json({}))
 app.post('/v2/friends/chat/:uid/typing', requireAuth, (req, res) => res.json({}))
 
-app.get('/v2/friends/poll', requireAuth, (req, res) =>
+app.get('/v2/friends/poll', requireAuth, ah(async (req, res) => {
+  const ids = await friendIds(req.userId)
+  const presence = []
+  for (const id of ids) {
+    const { rows } = await query('SELECT * FROM users WHERE id = $1', [id])
+    if (rows[0]) {
+      const u = rows[0]
+      presence.push({ ...friendRow(u), online: false })
+    }
+  }
+  const inc = await query(
+    `SELECT fr.id, fr.from_id, u.nickname, u.discord_avatar
+     FROM friend_requests fr JOIN users u ON u.id = fr.from_id
+     WHERE fr.to_id = $1 AND fr.status = 'pending' ORDER BY fr.created_at DESC`,
+    [req.userId],
+  )
+  const out = await query(
+    `SELECT fr.id, fr.to_id, u.nickname, u.discord_avatar
+     FROM friend_requests fr JOIN users u ON u.id = fr.to_id
+     WHERE fr.from_id = $1 AND fr.status = 'pending' ORDER BY fr.created_at DESC`,
+    [req.userId],
+  )
+  const map = (r) => ({ id: String(r.id), userId: String(r.from_id || r.to_id), nickname: r.nickname, avatarUrl: r.discord_avatar || null })
   res.json({
     now: Date.now(),
-    presence: [],
-    requests: { incoming: [], outgoing: [] },
+    presence,
+    requests: { incoming: inc.rows.map(map), outgoing: out.rows.map(map) },
     messages: [],
     reads: [],
     typing: [],
-  }),
-)
+  })
+}))
 
 app.post('/v2/friends/stats', requireAuth, (req, res) => res.json({}))
 app.post('/v2/friends/stats/hide', requireAuth, (req, res) => res.json({}))

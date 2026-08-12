@@ -40,14 +40,19 @@ html{scroll-behavior:smooth}
 [id]{scroll-margin-top:96px}
 body{
   --bg:#0A0E14; --bg2:#0D1320; --panel:#111927; --line:rgba(148,163,200,.12);
-  --txt:#E8EDF6; --mut:#8CA0BF; --faint:#5C6E8C; --acc:#5ACE66; --acc2:#7EDE8A;
+  --txt:#E8EDF6; --mut:#8CA0BF; --faint:#5C6E8C; --acc:#3EA6FF; --acc2:#66BDFF;
   background:var(--bg); color:var(--txt);
   font-family:'Manrope',system-ui,-apple-system,sans-serif;
   -webkit-font-smoothing:antialiased; line-height:1.55; overflow-x:hidden;
 }
 a{color:inherit;text-decoration:none}
 img,svg{display:block}
-::selection{background:rgba(90,206,102,.3)}
+::selection{background:rgba(62,166,255,.3)}
+/* Без текстового курсора: страница выглядит как интерфейс, а не документ.
+   В полях ввода каретка остаётся (иначе невозможно печатать). */
+body{cursor:default;user-select:none;-webkit-user-select:none}
+input,textarea{user-select:text;-webkit-user-select:text;cursor:text}
+a,button,[role="button"],label{cursor:pointer}
 /* ===== Фон: сетка + свечение ===== */
 .bg-grid{position:fixed;inset:0;z-index:-1;pointer-events:none;
   background-image:linear-gradient(rgba(148,163,200,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,200,.045) 1px,transparent 1px);
@@ -57,8 +62,8 @@ img,svg{display:block}
 }
 .bg-glow{position:fixed;inset:0;z-index:-1;pointer-events:none}
 .bg-glow::before,.bg-glow::after{content:'';position:absolute;border-radius:50%;filter:blur(90px);opacity:.5;animation:drift 18s ease-in-out infinite alternate}
-.bg-glow::before{width:520px;height:520px;left:-140px;top:-120px;background:radial-gradient(circle,rgba(90,206,102,.22),transparent 70%)}
-.bg-glow::after{width:620px;height:620px;right:-200px;top:120px;background:radial-gradient(circle,rgba(126,222,138,.2),transparent 70%);animation-delay:-9s}
+.bg-glow::before{width:520px;height:520px;left:-140px;top:-120px;background:radial-gradient(circle,rgba(62,166,255,.22),transparent 70%)}
+.bg-glow::after{width:620px;height:620px;right:-200px;top:120px;background:radial-gradient(circle,rgba(62,166,255,.2),transparent 70%);animation-delay:-9s}
 @keyframes drift{from{transform:translateY(0) scale(1)}to{transform:translateY(60px) scale(1.1)}}
 /* ===== Появление при скролле ===== */
 .rv{opacity:0;transform:translateY(26px);transition:opacity .7s cubic-bezier(.22,.61,.36,1),transform .7s cubic-bezier(.22,.61,.36,1)}
@@ -79,13 +84,13 @@ nav{position:sticky;top:0;z-index:30;backdrop-filter:blur(16px);-webkit-backdrop
 .nlinks a:hover{color:var(--txt);background:rgba(148,163,200,.08)}
 @media (max-width:760px){.nlinks{display:none}}
 /* ===== Кнопки ===== */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;border:0;cursor:pointer;font-family:inherit;font-weight:700;font-size:14px;padding:12px 22px;border-radius:11px;color:#fff;background:linear-gradient(135deg,#5ACE66,#3DBE55);box-shadow:0 4px 18px rgba(90,206,102,.25);transition:transform .18s cubic-bezier(.34,1.56,.64,1),box-shadow .18s,filter .18s}
-.btn:hover{transform:translateY(-2px);filter:brightness(1.07);box-shadow:0 8px 26px rgba(90,206,102,.35)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;border:0;cursor:pointer;font-family:inherit;font-weight:700;font-size:14px;padding:12px 22px;border-radius:11px;color:#fff;background:linear-gradient(135deg,#3EA6FF,#1E8BE8);box-shadow:0 4px 18px rgba(62,166,255,.25);transition:transform .18s cubic-bezier(.34,1.56,.64,1),box-shadow .18s,filter .18s}
+.btn:hover{transform:translateY(-2px);filter:brightness(1.07);box-shadow:0 8px 26px rgba(62,166,255,.35)}
 .btn:active{transform:translateY(0)}
 .btn:disabled{opacity:.55;cursor:default;transform:none}
 .btn.ghost{background:rgba(148,163,200,.08);border:1px solid var(--line);box-shadow:none;color:var(--txt)}
 .btn.ghost:hover{background:rgba(148,163,200,.14)}
-.btn.ghost.acc{color:var(--acc);border-color:rgba(90,206,102,.35)}
+.btn.ghost.acc{color:var(--acc);border-color:rgba(62,166,255,.35)}
 .btn.discord{background:linear-gradient(135deg,#5865F2,#4A56E8);box-shadow:0 4px 18px rgba(88,101,242,.28)}
 .btn.discord:hover{box-shadow:0 8px 26px rgba(88,101,242,.4)}
 .btn.sm{padding:9px 15px;font-size:13px;border-radius:9px}
@@ -93,10 +98,10 @@ nav{position:sticky;top:0;z-index:30;backdrop-filter:blur(16px);-webkit-backdrop
 .btn .ic{width:17px;height:17px}
 /* ===== Hero ===== */
 .hero{max-width:1120px;margin:0 auto;padding:96px 24px 54px;text-align:center;position:relative}
-.overline{display:inline-flex;align-items:center;gap:9px;font-family:'Unbounded';font-size:10.5px;font-weight:600;letter-spacing:.22em;color:var(--acc);border:1px solid rgba(90,206,102,.3);border-radius:99px;padding:7px 16px;background:rgba(90,206,102,.07)}
+.overline{display:inline-flex;align-items:center;gap:9px;font-family:'Unbounded';font-size:10.5px;font-weight:600;letter-spacing:.22em;color:var(--acc);border:1px solid rgba(62,166,255,.3);border-radius:99px;padding:7px 16px;background:rgba(62,166,255,.07)}
 .overline .ic{width:14px;height:14px}
 .hero h1{font-family:'Unbounded',sans-serif;font-weight:800;font-size:clamp(34px,6.2vw,64px);line-height:1.08;margin:26px 0 16px;letter-spacing:-.015em;color:#F2F6FB}
-.hero h1 em{font-style:normal;background:linear-gradient(100deg,#5ACE66 10%,#8FE89B 50%,#E8FCEB 95%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero h1 em{font-style:normal;background:linear-gradient(100deg,#3EA6FF 10%,#6ABEFF 50%,#D9ECFF 95%);-webkit-background-clip:text;background-clip:text;color:transparent}
 .hero p{color:var(--mut);font-size:17px;line-height:1.65;max-width:640px;margin:0 auto}
 .cta{display:flex;gap:14px;justify-content:center;margin-top:34px;flex-wrap:wrap}
 .plats{margin-top:30px;display:flex;gap:12px;justify-content:center;color:var(--faint);font-size:12.5px;font-weight:600;flex-wrap:wrap}
@@ -106,8 +111,8 @@ nav{position:sticky;top:0;z-index:30;backdrop-filter:blur(16px);-webkit-backdrop
 .wrap{max-width:1120px;margin:0 auto;padding:0 24px 96px}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:22px;margin-top:52px}
 .panel{background:linear-gradient(180deg,rgba(22,30,48,.7),rgba(17,25,39,.7));border:1px solid var(--line);border-radius:18px;padding:30px;position:relative;overflow:hidden;transition:border-color .25s,transform .25s}
-.panel::before{content:'';position:absolute;inset:0 0 auto;height:2px;background:linear-gradient(90deg,transparent,#5ACE66 50%,transparent);opacity:0;transition:opacity .3s}
-.panel:hover{border-color:rgba(90,206,102,.25);transform:translateY(-2px)}
+.panel::before{content:'';position:absolute;inset:0 0 auto;height:2px;background:linear-gradient(90deg,transparent,#3EA6FF 50%,transparent);opacity:0;transition:opacity .3s}
+.panel:hover{border-color:rgba(62,166,255,.25);transform:translateY(-2px)}
 .panel:hover::before{opacity:1}
 .panel h2{margin:0 0 8px;font-family:'Unbounded';font-weight:600;font-size:16px;letter-spacing:.01em}
 .panel .sub{margin:0 0 22px;color:var(--mut);font-size:13.5px;line-height:1.6}
@@ -117,7 +122,7 @@ nav{position:sticky;top:0;z-index:30;backdrop-filter:blur(16px);-webkit-backdrop
 .acc .dn{color:var(--mut);font-size:13px;margin-top:2px}
 .ava .ic{width:26px;height:26px}
 input{width:100%;background:rgba(8,12,18,.7);border:1px solid var(--line);border-radius:11px;color:var(--txt);padding:13px 15px;font-size:14.5px;outline:none;font-family:inherit;transition:border-color .2s,box-shadow .2s}
-input:focus{border-color:rgba(90,206,102,.5);box-shadow:0 0 0 3px rgba(90,206,102,.12)}
+input:focus{border-color:rgba(62,166,255,.5);box-shadow:0 0 0 3px rgba(62,166,255,.12)}
 input::placeholder{color:var(--faint)}
 .btn-block{width:100%;margin-top:16px}
 .msg{margin-top:14px;font-size:13px;line-height:1.55;color:var(--mut);min-height:20px}
@@ -126,22 +131,22 @@ input::placeholder{color:var(--faint)}
 .subtle:hover{color:var(--txt)}
 .step{display:flex;gap:13px;margin:12px 0;color:var(--mut);font-size:13.5px;line-height:1.55;align-items:flex-start}
 .step b{color:var(--txt)}
-.stepnum{flex:none;width:26px;height:26px;border-radius:9px;background:rgba(90,206,102,.12);color:var(--acc);display:grid;place-items:center;font-weight:800;font-size:12.5px;font-family:'Unbounded'}
+.stepnum{flex:none;width:26px;height:26px;border-radius:9px;background:rgba(62,166,255,.12);color:var(--acc);display:grid;place-items:center;font-weight:800;font-size:12.5px;font-family:'Unbounded'}
 .sechead{display:flex;align-items:center;gap:14px;margin:76px 0 10px}
 .sechead h2{margin:0;font-family:'Unbounded';font-weight:700;font-size:21px;letter-spacing:-.01em}
-.sechead .bar{width:34px;height:3px;border-radius:99px;background:linear-gradient(90deg,#5ACE66,#7EDE8A)}
+.sechead .bar{width:34px;height:3px;border-radius:99px;background:linear-gradient(90deg,#3EA6FF,#66BDFF)}
 .secd{color:var(--faint);font-size:14px;margin:6px 0 0;max-width:580px}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px;margin-top:30px}
 .feat{background:linear-gradient(180deg,rgba(22,30,48,.6),rgba(17,25,39,.6));border:1px solid var(--line);border-radius:16px;padding:24px;transition:transform .25s,border-color .25s,box-shadow .25s}
-.feat:hover{transform:translateY(-4px);border-color:rgba(90,206,102,.28);box-shadow:0 14px 34px rgba(0,0,0,.35)}
-.feat .fic{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;background:rgba(90,206,102,.12);color:var(--acc);margin-bottom:16px;transition:transform .25s}
+.feat:hover{transform:translateY(-4px);border-color:rgba(62,166,255,.28);box-shadow:0 14px 34px rgba(0,0,0,.35)}
+.feat .fic{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;background:rgba(62,166,255,.12);color:var(--acc);margin-bottom:16px;transition:transform .25s}
 .feat:hover .fic{transform:scale(1.08) rotate(-4deg)}
 .feat .fic svg{width:23px;height:23px}
 .feat b{font-size:15px;display:block;margin-bottom:7px;font-weight:800}
 .feat p{margin:0;color:var(--mut);font-size:13.5px;line-height:1.6}
 .goods{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}
 .tick{display:inline-flex;align-items:center;gap:9px;color:var(--mut);font-size:13.5px;background:rgba(22,30,48,.55);border:1px solid var(--line);padding:10px 15px;border-radius:99px;transition:border-color .2s,color .2s}
-.tick:hover{color:var(--txt);border-color:rgba(90,206,102,.3)}
+.tick:hover{color:var(--txt);border-color:rgba(62,166,255,.3)}
 .tick .ic{width:15px;height:15px;color:var(--acc)}
 /* ===== Футер ===== */
 footer{border-top:1px solid var(--line);background:rgba(8,11,17,.6);padding:52px 24px 60px}
@@ -204,8 +209,8 @@ const hero = (logged) => `
   <h1>Открой Minecraft <em>по-новому</em></h1>
   <p>Любые версии и сборки, скины и плащи, друзья и чат, свой сервер на хостинге — в одном окне. Бесплатно и без рекламы.</p>
   <div class="cta">
-    <a href="${logged ? '/#account' : '/v2/auth/discord'}"><button class="btn ${logged ? '' : 'discord'}">${ICON('ic-discord')}${logged ? 'Аккаунт и ник' : 'Войти через Discord'}</button></a>
-    <a href="#launcher"><button class="btn ghost">${ICON('ic-code')}Как войти в лаунчер</button></a>
+    <a href="/download"><button class="btn">${ICON('ic-code')}Установить лаунчер</button></a>
+    <a href="/v2/auth/discord"><button class="btn ghost">${ICON('ic-discord')}Войти через Discord</button></a>
   </div>
   <div class="plats"><span>Windows</span><span>macOS</span><span>Linux</span><span>Без лицензии</span><span>Любая версия</span><span>Открытый код</span></div>
 </div>`
@@ -312,7 +317,7 @@ export const approvePage = ({ user, deviceCode, userCode }) => HEAD('Вход в
         <div class="dn">${esc(user.discordName || '')}</div>
       </div>
     </div>
-    <div style="font-family:'Unbounded';font-size:28px;letter-spacing:.14em;padding:16px;background:rgba(8,12,18,.7);border:1px solid var(--line);border-radius:12px;margin:0 0 20px">${esc(userCode)}</div>
+    <div style="font-family:'Unbounded';font-size:28px;letter-spacing:.14em;padding:16px;background:rgba(8,12,18,.7);border:1px solid var(--line);border-radius:12px;margin:0 0 20px;user-select:text;-webkit-user-select:text;cursor:text">${esc(userCode)}</div>
     <form method="POST" action="/v2/auth/launcher/accept">
       <input type="hidden" name="deviceCode" value="${esc(deviceCode)}" />
       <button class="btn" type="submit" style="width:100%">${ICON('ic-key')}Войти в лаунчер</button>

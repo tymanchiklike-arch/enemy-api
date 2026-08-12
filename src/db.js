@@ -76,6 +76,29 @@ const ensureSchema = () => {
         source     TEXT NOT NULL DEFAULT 'custom',
         created_at BIGINT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS friend_requests (
+        id         BIGSERIAL PRIMARY KEY,
+        from_id    BIGINT NOT NULL,
+        to_id      BIGINT NOT NULL,
+        status     TEXT NOT NULL DEFAULT 'pending',
+        created_at BIGINT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS friend_requests_to_idx ON friend_requests (to_id, status);
+
+      CREATE TABLE IF NOT EXISTS friendships (
+        user_a     BIGINT NOT NULL,
+        user_b     BIGINT NOT NULL,
+        created_at BIGINT NOT NULL,
+        PRIMARY KEY (user_a, user_b)
+      );
+
+      CREATE TABLE IF NOT EXISTS blocks (
+        blocker_id BIGINT NOT NULL,
+        blocked_id BIGINT NOT NULL,
+        created_at BIGINT NOT NULL,
+        PRIMARY KEY (blocker_id, blocked_id)
+      );
       `,
       )
       .catch((err) => {
