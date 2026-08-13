@@ -288,7 +288,8 @@ const adminOk = (req) => {
   const p = c.slice(0, i)
   const s = c.slice(i + 1)
   const expected = createHmac('sha256', ADMIN_PASSWORD).update(p).digest('base64url')
-  const t = Number(Buffer.from(p, 'base64url').toString())
+  // Payload — "admin:<timestamp>": вынимаем время и не даём NaN вместо числа.
+  const t = Number(Buffer.from(p, 'base64url').toString().split(':').pop())
   return s === expected && t > Date.now()
 }
 const setAdminCookie = (res) =>
@@ -299,14 +300,15 @@ const clearAdminCookie = (res) =>
 app.get('/admin', (req, res) => {
   res
     .set('Content-Type', 'text/html; charset=utf-8')
-    .send(adminPage({ authed: adminOk(req), passwordSet: Boolean(process.env.ADMIN_PASSWORD) }))
+    .send(adminPage({ authed: adminOk(req), passwordSet: Boolean(process.env.ADMIN_PASSWORD), loginError: req.query.error === '1' }))
 })
 
 app.post('/admin', express.urlencoded({ extended: false }), (req, res) => {
   if (typeof req.body.password === 'string' && req.body.password === ADMIN_PASSWORD) {
     setAdminCookie(res)
+    return res.redirect('/admin')
   }
-  res.redirect('/admin')
+  res.redirect('/admin?error=1')
 })
 
 app.get('/admin/logout', (req, res) => {

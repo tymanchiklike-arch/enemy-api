@@ -342,7 +342,7 @@ export const errorPage = (title, text) => HEAD(title) + NAV({ logged: '' }) + `
 
 // ============ Админ-панель (по прямому адресу /admin) ============
 
-export const adminPage = ({ authed, passwordSet }) => {
+export const adminPage = ({ authed, passwordSet, loginError }) => {
   if (!authed) {
     return HEAD('Админ-панель') + NAV({ logged: '' }) + `
 <div class="wrap" style="max-width:440px">
@@ -354,7 +354,7 @@ export const adminPage = ({ authed, passwordSet }) => {
       <input type="password" name="password" placeholder="Пароль" autocomplete="current-password" />
       <button class="btn" type="submit" style="width:100%">Войти</button>
     </form>
-    <p class="msg" id="te"></p>
+    ${loginError ? '<p class="msg err">Неверный пароль — попробуй ещё раз.</p>' : ''}
   </div>
 </div>
 <script>
@@ -364,7 +364,7 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
   return HEAD('Админ-панель') + NAV({ logged: '' }) + `
 <div class="wrap">
   <div class="sechead"><span class="bar"></span><h2>Админ-панель</h2></div>
-  <p class="secd">Пользователи Enemy: смена ника, удаление аккаунта, выдача бейджей (Owner / Admin / Moder / Tester) — по нику или id. Бейджи показываются в лаунчере рядом с ником.</p>
+  <p class="secd">Пользователи Enemy: смена ника, удаление аккаунта, выдача бейджа (Owner / Admin / Moder / Tester — один на игрока) по нику или id. Бейдж показывается в лаунчере рядом с ником.</p>
   <div class="panel" style="padding:0;overflow:hidden">
     <table style="width:100%;border-collapse:collapse;font-size:13.5px">
       <thead><tr style="text-align:left;color:var(--faint);font-size:11px;letter-spacing:.08em;text-transform:uppercase">
@@ -438,7 +438,10 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
     var chip = e.target.closest('button.role-chip')
     if (chip) {
       var uid = chip.getAttribute('data-uid')
-      chip.classList.toggle('on')
+      var wasOn = chip.classList.contains('on')
+      // Один бейдж на игрока: клик выбирает его, повторный клик снимает.
+      chip.closest('tr').querySelectorAll('.role-chip').forEach(function (c) { c.classList.remove('on') })
+      if (!wasOn) chip.classList.add('on')
       chip.disabled = true
       fetch('/v2/admin/set-roles', {
         method: 'POST',
@@ -447,7 +450,7 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
       }).then(function (r) {
         return r.json().then(function (d) {
           if (!r.ok) { msg(d.message || 'Не получилось'); return }
-          msg('Бейджи #' + uid + ' обновлены: ' + (d.roles.length ? d.roles.join(', ') : 'нет'))
+          msg('Бейдж #' + uid + ': ' + (d.roles.length ? d.roles.join(', ') : 'снят'))
         })
       }).catch(function () { msg('Ошибка сети') }).then(function () { chip.disabled = false })
       return

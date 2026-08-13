@@ -147,12 +147,10 @@ const ensureSchema = () => {
         hidden          BOOLEAN NOT NULL DEFAULT false
       );
 
-      -- Владелец (Endertyma) всегда носит все роли: лаунчер показывает их как
-      -- бейджи рядом с ником. Идемпотентно: при каждом старте подтягиваем до
-      -- полного набора, если админ случайно убрал одну из ролей.
-      UPDATE users SET roles = '["owner","admin","moder","tester"]'
-      WHERE LOWER(nickname) = 'endertyma'
-        AND roles IS DISTINCT FROM '["owner","admin","moder","tester"]';
+      -- Владелец (Endertyma) носит бейдж владельца. Выдаём один раз (пока ролей
+      -- нет) — дальше админка управляет вручную: у игрока может быть один бейдж.
+      UPDATE users SET roles = '["owner"]'
+      WHERE LOWER(nickname) = 'endertyma' AND roles = '[]';
       `,
       )
       .catch((err) => {
@@ -207,8 +205,10 @@ export const rolesOf = (user) => {
 
 export const setUserRoles = async (userId, roles) => {
   const clean = [...new Set((roles || []).map(String).filter((r) => ALL_ROLES.includes(r)))]
-  await query('UPDATE users SET roles = $1 WHERE id = $2', [JSON.stringify(clean), userId])
-  return clean
+  // Правило лаунчера: у игрока один бейдж. Берём последний выбранный.
+  const single = clean.length ? [clean[clean.length - 1]] : []
+  await query('UPDATE users SET roles = $1 WHERE id = $2', [JSON.stringify(single), userId])
+  return single
 }
 
 export const newUser = async (nickname, email = null) => {
