@@ -38,6 +38,8 @@ import {
   hidePlayStats,
   playStatsOf,
   bumpPresence,
+  rolesOf,
+  setUserRoles,
 } from './db.js'
 import { requireAuth, setSessionReader, signAccess, verifyAccess } from './auth.js'
 import { adminPage, approvePage, errorPage, sitePage } from './site.js'
@@ -315,9 +317,36 @@ app.get('/admin/logout', (req, res) => {
 app.get('/v2/admin/users', ah(async (req, res) => {
   if (!adminOk(req)) return res.status(401).json({ message: 'нет доступа' })
   const { rows } = await query(
-    'SELECT id, nickname, discord_id, discord_username, email, created_at FROM users ORDER BY created_at DESC LIMIT 500',
+    'SELECT id, nickname, discord_id, discord_username, email, roles, created_at FROM users ORDER BY created_at DESC LIMIT 500',
   )
-  res.json({ users: rows })
+  res.json({
+    users: rows.map((r) => ({
+      id: String(r.id),
+      nickname: r.nickname,
+      discord_id: r.discord_id,
+      discord_username: r.discord_username,
+      email: r.email,
+      roles: rolesOf(r),
+      created_at: r.created_at,
+    })),
+  })
+}))
+
+app.post('/v2/admin/set-roles', ah(async (req, res) => {
+  if (!adminOk(req)) return res.status(401).json({ message: 'нет доступа' })
+  const id = Number(req.body && req.body.id)
+  const nick = String((req.body && req.body.nickname) || '').trim()
+  const roles = Array.isArray(req.body && req.body.roles) ? req.body.roles : []
+  // Выдавать можно и по id, и по нику (LOWER-сравнение, как в поиске друзей).
+  let rows
+  if (id) {
+    rows = (await query('SELECT id FROM users WHERE id = $1', [id])).rows
+  } else if (nick) {
+    rows = (await query('SELECT id FROM users WHERE LOWER(nickname) = LOWER($1) LIMIT 1', [nick])).rows
+  }
+  if (!rows || !rows.length) return res.status(404).json({ message: 'Пользователь не найден' })
+  const clean = await setUserRoles(Number(rows[0].id), roles)
+  res.json({ ok: true, roles: clean })
 }))
 
 app.post('/v2/admin/set-nick', ah(async (req, res) => {
@@ -506,6 +535,7 @@ app.get('/v2/users/me', requireAuth, ah(async (req, res) => {
     nickname: user.nickname,
     discordName: user.discord_username || null,
     avatarUrl: await avatarForUser(user),
+    roles: rolesOf(user),
   })
 }))
 
@@ -715,6 +745,7 @@ const presenceRow = async (me, user) => {
   const playing = !!p && p.status === 'playing'
   return {
     ...friendRow(user),
+    roles: rolesOf(user),
     online,
     playing,
     text: playing
@@ -799,6 +830,7 @@ app.get('/v2/friends/search', requireAuth, ah(async (req, res) => {
       userId: String(uid),
       nickname: u.nickname,
       avatarUrl: u.discord_avatar || null,
+      roles: rolesOf(u),
       isFriend,
       pending,
       text: 'Игрок Enemy',
@@ -909,6 +941,7 @@ app.get('/v2/friends/profile/:uid', requireAuth, ah(async (req, res) => {
   res.json({
     nick: u.nickname,
     nickname: u.nickname,
+    roles: rolesOf(u),
     text: playing ? (p.server || p.build || 'Играет') : online ? 'В лаунчере' : 'Игрок Enemy',
     online,
     playing,

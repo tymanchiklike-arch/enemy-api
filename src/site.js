@@ -364,13 +364,14 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
   return HEAD('Админ-панель') + NAV({ logged: '' }) + `
 <div class="wrap">
   <div class="sechead"><span class="bar"></span><h2>Админ-панель</h2></div>
-  <p class="secd">Пользователи Enemy: смена ника, удаление аккаунта.</p>
+  <p class="secd">Пользователи Enemy: смена ника, удаление аккаунта, выдача бейджей (Owner / Admin / Moder / Tester) — по нику или id. Бейджи показываются в лаунчере рядом с ником.</p>
   <div class="panel" style="padding:0;overflow:hidden">
     <table style="width:100%;border-collapse:collapse;font-size:13.5px">
       <thead><tr style="text-align:left;color:var(--faint);font-size:11px;letter-spacing:.08em;text-transform:uppercase">
         <th style="padding:14px 16px">#</th>
         <th style="padding:14px 8px">Ник</th>
         <th style="padding:14px 8px">Discord</th>
+        <th style="padding:14px 8px">Роли</th>
         <th style="padding:14px 8px">Создан</th>
         <th style="padding:14px 16px;text-align:right">Действия</th>
       </tr></thead>
@@ -380,10 +381,20 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
   </div>
   <a href="/admin/logout" style="color:var(--mut);font-size:13.5px;display:inline-block;margin-top:16px">Выйти из админки →</a>
 </div>
+<style>
+.role-chip{display:inline-block;border:0;cursor:pointer;font-family:'Manrope';font-weight:800;font-size:10.5px;letter-spacing:.03em;padding:4px 8px;border-radius:6px;margin:2px;background:rgba(148,163,200,.08);color:var(--faint);transition:color .15s,background .15s}
+.role-chip.on{color:#0A0E14}
+.role-chip[data-role="owner"].on{background:#ffd83d;color:#000}
+.role-chip[data-role="admin"].on{background:#ff5f57;color:#fff}
+.role-chip[data-role="moder"].on{background:#7dff6b;color:#000}
+.role-chip[data-role="tester"].on{background:#6be8ff;color:#000}
+.role-chip:disabled{opacity:.5;cursor:default}
+</style>
 <script>
 (function () {
   var rows = document.getElementById('rows')
   var st = document.getElementById('st')
+  var ROLE_ORDER = ['owner', 'admin', 'moder', 'tester']
   function msg(t) { st.textContent = t }
   function human(sec) {
     if (!sec) return '—'
@@ -392,13 +403,19 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
   }
   function render(users) {
     rows.innerHTML = ''
-    if (!users.length) { rows.innerHTML = '<tr><td colspan="5" style="padding:18px;color:var(--faint)">Пока никого нет.</td></tr>'; return }
+    if (!users.length) { rows.innerHTML = '<tr><td colspan="6" style="padding:18px;color:var(--faint)">Пока никого нет.</td></tr>'; return }
     users.forEach(function (u) {
       var tr = document.createElement('tr')
       tr.style.borderTop = '1px solid var(--line)'
+      var roles = u.roles || []
+      var chips = ROLE_ORDER.map(function (r) {
+        var on = roles.indexOf(r) !== -1
+        return '<button class="role-chip' + (on ? ' on' : '') + '" data-uid="' + u.id + '" data-role="' + r + '">' + r.charAt(0).toUpperCase() + r.slice(1) + '</button>'
+      }).join('')
       tr.innerHTML = '<td style="padding:10px 16px;color:var(--faint);white-space:nowrap">' + u.id + '</td>' +
         '<td style="padding:10px 8px"><input data-uid="' + u.id + '" value="' + esc2(u.nickname) + '" maxlength="20" style="max-width:150px;padding:8px 10px;font-size:13px" /></td>' +
         '<td style="padding:10px 8px;color:var(--mut)">' + esc2(u.discord_username || (u.discord_id ? '#' + u.discord_id : '—')) + '</td>' +
+        '<td style="padding:10px 8px;white-space:nowrap;min-width:180px">' + chips + '</td>' +
         '<td style="padding:10px 8px;color:var(--faint);white-space:nowrap">' + human(u.created_at) + '</td>' +
         '<td style="padding:10px 16px;text-align:right;white-space:nowrap">' +
           '<button class="btn sm" data-a="set" data-uid="' + u.id + '" style="margin-right:8px">Сохранить</button>' +
@@ -411,7 +428,30 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
     if (r.status === 401) { msg('Сессия истекла — перезайди под паролем.'); location.href = '/admin'; return }
     return r.json().then(function (d) { render(d.users || []) })
   }).catch(function () { msg('Ошибка сети') })
+  function rowRoles(uid) {
+    var tr = rows.querySelector('button.role-chip[data-uid="' + uid + '"]').closest('tr')
+    var out = []
+    tr.querySelectorAll('.role-chip').forEach(function (c) { if (c.classList.contains('on')) out.push(c.getAttribute('data-role')) })
+    return out
+  }
   document.addEventListener('click', function (e) {
+    var chip = e.target.closest('button.role-chip')
+    if (chip) {
+      var uid = chip.getAttribute('data-uid')
+      chip.classList.toggle('on')
+      chip.disabled = true
+      fetch('/v2/admin/set-roles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: uid, roles: rowRoles(uid) })
+      }).then(function (r) {
+        return r.json().then(function (d) {
+          if (!r.ok) { msg(d.message || 'Не получилось'); return }
+          msg('Бейджи #' + uid + ' обновлены: ' + (d.roles.length ? d.roles.join(', ') : 'нет'))
+        })
+      }).catch(function () { msg('Ошибка сети') }).then(function () { chip.disabled = false })
+      return
+    }
     var b = e.target.closest('button[data-a]')
     if (!b) return
     var uid = b.getAttribute('data-uid')

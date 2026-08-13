@@ -38,6 +38,7 @@ const ensureSchema = () => {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_id TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_username TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_avatar TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS roles TEXT NOT NULL DEFAULT '[]';
 
       CREATE TABLE IF NOT EXISTS device_codes (
         device_code TEXT PRIMARY KEY,
@@ -145,6 +146,13 @@ const ensureSchema = () => {
         servers         TEXT NOT NULL DEFAULT '[]',
         hidden          BOOLEAN NOT NULL DEFAULT false
       );
+
+      -- Владелец (Endertyma) всегда носит все роли: лаунчер показывает их как
+      -- бейджи рядом с ником. Идемпотентно: при каждом старте подтягиваем до
+      -- полного набора, если админ случайно убрал одну из ролей.
+      UPDATE users SET roles = '["owner","admin","moder","tester"]'
+      WHERE LOWER(nickname) = 'endertyma'
+        AND roles IS DISTINCT FROM '["owner","admin","moder","tester"]';
       `,
       )
       .catch((err) => {
@@ -180,6 +188,28 @@ const isUniqueViolation = (err) => err && (err.code === '23505' || /duplicate ke
 
 export const uuidFromId = (id) =>
   createHash('md5').update('enemy:' + id).digest('hex')
+
+// ============ Роли (бейджи) ============
+
+export const ALL_ROLES = ['owner', 'admin', 'moder', 'tester']
+
+/// Роли хранятся как JSON-массив в users.roles; отдаём только канонический
+/// набор, мусор отбрасываем.
+export const rolesOf = (user) => {
+  if (!user || !user.roles) return []
+  try {
+    const arr = JSON.parse(user.roles)
+    return Array.isArray(arr) ? [...new Set(arr.filter((r) => ALL_ROLES.includes(String(r))))] : []
+  } catch {
+    return []
+  }
+}
+
+export const setUserRoles = async (userId, roles) => {
+  const clean = [...new Set((roles || []).map(String).filter((r) => ALL_ROLES.includes(r)))]
+  await query('UPDATE users SET roles = $1 WHERE id = $2', [JSON.stringify(clean), userId])
+  return clean
+}
 
 export const newUser = async (nickname, email = null) => {
   for (let attempt = 0; ; attempt++) {
