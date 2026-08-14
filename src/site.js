@@ -364,7 +364,7 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
   return HEAD('Админ-панель') + NAV({ logged: '' }) + `
 <div class="wrap">
   <div class="sechead"><span class="bar"></span><h2>Админ-панель</h2></div>
-  <p class="secd">Пользователи Enemy: смена ника, удаление аккаунта, выдача бейджа (Owner / Admin / Moder / Tester — один на игрока) по нику или id. Бейдж показывается в лаунчере рядом с ником.</p>
+  <p class="secd">Пользователи Enemy: смена ника, удаление аккаунта, выдача бейджа (Owner / Admin / Moder / Tester — один на игрока) по нику или id. Бейдж показывается в лаунчере рядом с ником. Ниже — баны по IP: заблокированный адрес не пройдёт ни в лаунчер, ни на сайт.</p>
   <div class="panel" style="padding:0;overflow:hidden">
     <table class="admin-table" style="width:100%;border-collapse:collapse;font-size:13.5px">
       <thead><tr style="text-align:left;color:var(--faint);font-size:11px;letter-spacing:.08em;text-transform:uppercase">
@@ -372,6 +372,7 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
         <th style="padding:14px 8px">Ник</th>
         <th style="padding:14px 8px">Discord</th>
         <th style="padding:14px 8px">Роли</th>
+        <th style="padding:14px 8px">IP</th>
         <th style="padding:14px 8px">Создан</th>
         <th style="padding:14px 16px;text-align:right">Действия</th>
       </tr></thead>
@@ -379,6 +380,17 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
     </table>
     <div id="st" style="padding:16px;color:var(--mut);font-size:13px"></div>
   </div>
+
+  <div class="sechead" style="margin-top:26px"><span class="bar"></span><h2>Баны по IP</h2></div>
+  <div class="panel" style="padding:16px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input id="banIp" placeholder="IP, например 1.2.3.4" style="flex:1;min-width:180px;padding:8px 10px;font-size:13px" />
+      <input id="banReason" placeholder="Причина (необязательно)" style="flex:1.4;min-width:180px;padding:8px 10px;font-size:13px" />
+      <button class="btn" id="banAdd" style="flex:none">Забанить</button>
+    </div>
+    <div id="banList" style="margin-top:12px"></div>
+  </div>
+
   <a href="/admin/logout" style="color:var(--mut);font-size:13.5px;display:inline-block;margin-top:16px">Выйти из админки →</a>
 </div>
 <style>
@@ -404,7 +416,7 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
   }
   function render(users) {
     rows.innerHTML = ''
-    if (!users.length) { rows.innerHTML = '<tr><td colspan="6" style="padding:18px;color:var(--faint)">Пока никого нет.</td></tr>'; return }
+    if (!users.length) { rows.innerHTML = '<tr><td colspan="7" style="padding:18px;color:var(--faint)">Пока никого нет.</td></tr>'; return }
     users.forEach(function (u) {
       var tr = document.createElement('tr')
       tr.style.borderTop = '1px solid var(--line)'
@@ -417,14 +429,68 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
         '<td style="padding:10px 8px"><input data-uid="' + u.id + '" value="' + esc2(u.nickname) + '" maxlength="20" style="max-width:150px;padding:8px 10px;font-size:13px" /></td>' +
         '<td style="padding:10px 8px;color:var(--mut)">' + esc2(u.discord_username || (u.discord_id ? '#' + u.discord_id : '—')) + '</td>' +
         '<td style="padding:10px 8px;white-space:nowrap;min-width:180px">' + chips + '</td>' +
+        '<td style="padding:10px 8px;white-space:nowrap">' + (u.last_ip ? esc2(u.last_ip) : '<span style="color:var(--faint)">—</span>') + '</td>' +
         '<td style="padding:10px 8px;color:var(--faint);white-space:nowrap">' + human(u.created_at) + '</td>' +
         '<td style="padding:10px 16px;text-align:right;white-space:nowrap">' +
+          (u.last_ip ? '<button class="btn sm" data-a="ban" data-uid="' + u.id + '" style="margin-right:8px">Бан</button>' : '') +
           '<button class="btn sm" data-a="set" data-uid="' + u.id + '" style="margin-right:8px">Сохранить</button>' +
           '<button class="btn sm danger" data-a="del" data-uid="' + u.id + '">Удалить</button></td>'
       rows.appendChild(tr)
     })
   }
   function esc2(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
+  function human2(sec) {
+    if (!sec) return '—'
+    var d = new Date(sec)
+    return d.getDate() + '.' + String(d.getMonth() + 1).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')
+  }
+  function renderBans(list) {
+    var el = document.getElementById('banList')
+    if (!list.length) { el.innerHTML = '<p style="color:var(--faint);font-size:13px">Забаненных нет.</p>'; return }
+    el.innerHTML = list.map(function (b) {
+      return '<div style="display:flex;gap:10px;align-items:center;padding:8px 2px;border-top:1px solid var(--line)">' +
+        '<b style="min-width:0;word-break:break-all;font-size:13.5px">' + esc2(b.ip) + '</b>' +
+        '<span style="flex:1;color:var(--mut);font-size:13px">' + (b.reason ? esc2(b.reason) : '') + '</span>' +
+        '<span style="color:var(--faint);font-size:12px;white-space:nowrap">' + human2(b.created_at) + '</span>' +
+        '<button class="btn sm" data-unban="' + esc2(b.ip) + '">Разбанить</button></div>'
+    }).join('')
+  }
+  function loadBans() {
+    fetch('/v2/admin/bans').then(function (r) {
+      if (r.status === 401) return
+      return r.json().then(function (d) { renderBans(d.bans || []) })
+    }).catch(function () {})
+  }
+  function prefillBan(ip) {
+    var inp = document.getElementById('banIp')
+    if (inp) { inp.value = ip || ''; inp.focus() }
+  }
+  var banAdd = document.getElementById('banAdd')
+  if (banAdd) banAdd.onclick = function () {
+    var ip = document.getElementById('banIp').value.trim()
+    var reason = document.getElementById('banReason').value.trim()
+    if (!ip) { msg('Введи IP'); return }
+    banAdd.disabled = true
+    fetch('/v2/admin/ban', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ip: ip, reason: reason })
+    }).then(function (r) {
+      return r.json().then(function (d) {
+        if (!r.ok) { msg(d.message || 'Не получилось'); return }
+        msg('IP забанен: ' + ip)
+        document.getElementById('banIp').value = ''
+        document.getElementById('banReason').value = ''
+        loadBans()
+      })
+    }).catch(function () { msg('Ошибка сети') }).then(function () { banAdd.disabled = false })
+  }
+  var banIpEl = document.getElementById('banIp')
+  var banReasonEl = document.getElementById('banReason')
+  function banEnter(e) { if (e.key === 'Enter' && banAdd) banAdd.onclick() }
+  if (banIpEl) banIpEl.addEventListener('keydown', banEnter)
+  if (banReasonEl) banReasonEl.addEventListener('keydown', banEnter)
+  loadBans()
   fetch('/v2/admin/users').then(function (r) {
     if (r.status === 401) { msg('Сессия истекла — перезайди под паролем.'); location.href = '/admin'; return }
     return r.json().then(function (d) { render(d.users || []) })
@@ -456,10 +522,32 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
       }).catch(function () { msg('Ошибка сети') }).then(function () { chip.disabled = false })
       return
     }
+    var ub = e.target.closest('button[data-unban]')
+    if (ub) {
+      var ubIp = ub.getAttribute('data-unban')
+      if (!confirm('Разбанить ' + ubIp + '?')) return
+      fetch('/v2/admin/unban', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip: ubIp })
+      }).then(function (r) {
+        return r.json().then(function (d) {
+          if (!r.ok) { msg(d.message || 'Не получилось'); return }
+          msg('Разбанен: ' + ubIp)
+          loadBans()
+        })
+      }).catch(function () { msg('Ошибка сети') })
+      return
+    }
     var b = e.target.closest('button[data-a]')
     if (!b) return
     var uid = b.getAttribute('data-uid')
     var act = b.getAttribute('data-a')
+    if (act === 'ban') {
+      var ipTd = b.closest('tr').querySelectorAll('td')[4]
+      prefillBan(ipTd ? ipTd.textContent.trim() : '')
+      return
+    }
     if (act === 'del' && !confirm('Удалить пользователя #' + uid + '?')) return
     var body = act === 'del' ? { id: uid } : { id: uid, nickname: rows.querySelector('input[data-uid="' + uid + '"]').value }
     b.disabled = true

@@ -116,6 +116,27 @@ app.use((req, res, next) => {
   next()
 })
 
+// ============ IP-баны ============
+
+/// Реальный IP клиента: Render/Supabase проксируют, так что читаем
+/// X-Forwarded-For (первое значение), иначе req.ip.
+const clientIp = (req) => {
+  const f = req.headers['x-forwarded-for']
+  const ip = (typeof f === 'string' ? f.split(',')[0] : '').trim() || req.ip || (req.socket && req.socket.remoteAddress) || ''
+  return ip
+}
+
+app.use('/v2', async (req, res, next) => {
+  if (req.path === '/health' || req.path.startsWith('/admin/')) return next()
+  const ip = clientIp(req)
+  if (!ip) return next()
+  try {
+    const { rows } = await query('SELECT reason FROM ip_bans WHERE ip = $1', [ip])
+    if (rows[0]) return res.status(403).json({ message: 'Твой IP заблокирован' })
+  } catch {}
+  next()
+})
+
 const userCode = () => {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
   const pick = (n) =>
@@ -319,7 +340,7 @@ app.get('/admin/logout', (req, res) => {
 app.get('/v2/admin/users', ah(async (req, res) => {
   if (!adminOk(req)) return res.status(401).json({ message: 'нет доступа' })
   const { rows } = await query(
-    'SELECT id, nickname, discord_id, discord_username, email, roles, created_at FROM users ORDER BY created_at DESC LIMIT 500',
+    'SELECT id, nickname, discord_id, discord_username, email, roles, last_ip, created_at FROM users ORDER BY created_at DESC LIMIT 500',
   )
   res.json({
     users: rows.map((r) => ({
@@ -329,9 +350,36 @@ app.get('/v2/admin/users', ah(async (req, res) => {
       discord_username: r.discord_username,
       email: r.email,
       roles: rolesOf(r),
+      last_ip: r.last_ip || null,
       created_at: r.created_at,
     })),
   })
+}))
+
+app.get('/v2/admin/bans', ah(async (req, res) => {
+  if (!adminOk(req)) return res.status(401).json({ message: 'нет доступа' })
+  const { rows } = await query('SELECT ip, reason, created_at FROM ip_bans ORDER BY created_at DESC LIMIT 500')
+  res.json({ bans: rows.map((r) => ({ ip: r.ip, reason: r.reason || '', created_at: r.created_at })) })
+}))
+
+app.post('/v2/admin/ban', ah(async (req, res) => {
+  if (!adminOk(req)) return res.status(401).json({ message: 'нет доступа' })
+  const ip = String((req.body && req.body.ip) || '').trim()
+  const reason = String((req.body && req.body.reason) || '').trim().slice(0, 200)
+  if (!ip || /\s/.test(ip) || ip.length > 64) return res.status(400).json({ message: 'IP не подходит' })
+  await query(
+    'INSERT INTO ip_bans (ip, reason, created_at) VALUES ($1,$2,$3) ON CONFLICT (ip) DO UPDATE SET reason = EXCLUDED.reason',
+    [ip, reason, Date.now()],
+  )
+  res.json({ ok: true })
+}))
+
+app.post('/v2/admin/unban', ah(async (req, res) => {
+  if (!adminOk(req)) return res.status(401).json({ message: 'нет доступа' })
+  const ip = String((req.body && req.body.ip) || '').trim()
+  if (!ip) return res.status(400).json({ message: 'нет ip' })
+  await query('DELETE FROM ip_bans WHERE ip = $1', [ip])
+  res.json({ ok: true })
 }))
 
 app.post('/v2/admin/set-roles', ah(async (req, res) => {
@@ -538,32 +586,48 @@ app.get('/v2/users/me', requireAuth, ah(async (req, res) => {
     discordName: user.discord_username || null,
     avatarUrl: await avatarForUser(user),
     roles: rolesOf(user),
+    banner: user.banner || '',
   })
 }))
 
 const NICK_RE = /^[\p{L}\p{N}\p{P}\p{S} ]{2,20}$/u
 const normalizeNick = (s) => String(s || '').trim().replace(/\s+/g, ' ').slice(0, 20)
 
-/// Смена ника работает и из лаунчера (Bearer), и с сайта (сессия).
-/// Дубли ников запрещены (в т.ч. с разным регистром) уникальным индексом в БД.
+const BANNER_RE = /^#[0-9a-fA-F]{3,8}$/
+
+/// Смена ника и/или цвета баннера. Работает из лаунчера (Bearer) и с сайта
+/// (сессия). Дубли ников запрещены (в т.ч. с разным регистром) индексом в БД.
 app.patch('/v2/users/me', requireAuth, ah(async (req, res) => {
-  const nick = normalizeNick(req.body && req.body.nickname)
-  if (nick.length < 2 || !NICK_RE.test(nick)) {
-    return res.status(400).json({ message: 'Ник — 2–20 символов. Можно буквы любого языка, цифры и символы' })
+  const body = req.body || {}
+  const hasBanner = typeof body.banner === 'string'
+  const hasNick = typeof body.nickname === 'string' && body.nickname.trim()
+  if (!hasBanner && !hasNick) return res.status(400).json({ message: 'Не передано ни одно поле' })
+  if (hasBanner) {
+    const b = body.banner.trim()
+    if (b && !BANNER_RE.test(b)) {
+      return res.status(400).json({ message: 'Цвет баннера — hex, например #5b8cff' })
+    }
+    await query('UPDATE users SET banner = $1 WHERE id = $2', [b, req.userId])
   }
-  const { rows: taken } = await query(
-    'SELECT id FROM users WHERE LOWER(nickname) = LOWER($1) AND id <> $2 LIMIT 1',
-    [nick, req.userId],
-  )
-  if (taken[0]) return res.status(409).json({ message: 'Этот ник уже занят' })
-  try {
-    await query('UPDATE users SET nickname = $1 WHERE id = $2', [nick, req.userId])
-  } catch (err) {
-    if (String(err && err.code) === '23505') return res.status(409).json({ message: 'Этот ник уже занят' })
-    throw err
+  if (hasNick) {
+    const nick = normalizeNick(body.nickname)
+    if (nick.length < 2 || !NICK_RE.test(nick)) {
+      return res.status(400).json({ message: 'Ник — 2–20 символов. Можно буквы любого языка, цифры и символы' })
+    }
+    const { rows: taken } = await query(
+      'SELECT id FROM users WHERE LOWER(nickname) = LOWER($1) AND id <> $2 LIMIT 1',
+      [nick, req.userId],
+    )
+    if (taken[0]) return res.status(409).json({ message: 'Этот ник уже занят' })
+    try {
+      await query('UPDATE users SET nickname = $1 WHERE id = $2', [nick, req.userId])
+    } catch (err) {
+      if (String(err && err.code) === '23505') return res.status(409).json({ message: 'Этот ник уже занят' })
+      throw err
+    }
   }
   const { rows } = await query('SELECT * FROM users WHERE id = $1', [req.userId])
-  res.json({ nickname: nick, avatarUrl: await avatarForUser(rows[0]) })
+  res.json({ nickname: rows[0].nickname, avatarUrl: await avatarForUser(rows[0]), banner: rows[0].banner || '' })
 }))
 
 app.post('/v2/launcher/heartbeat', requireAuth, (req, res) => res.json({}))
@@ -722,6 +786,7 @@ const friendRow = (user) => ({
   userId: String(user.id),
   nickname: user.nickname,
   avatarUrl: user.discord_avatar || null,
+  banner: user.banner || '',
 })
 
 const rowToMsg = (row) => {
@@ -944,6 +1009,7 @@ app.get('/v2/friends/profile/:uid', requireAuth, ah(async (req, res) => {
     nick: u.nickname,
     nickname: u.nickname,
     roles: rolesOf(u),
+    banner: u.banner || '',
     text: playing ? (p.server || p.build || 'Играет') : online ? 'В лаунчере' : 'Игрок Enemy',
     online,
     playing,
@@ -1012,6 +1078,11 @@ app.post('/v2/friends/chat/:uid/typing', requireAuth, ah(async (req, res) => {
 app.get('/v2/friends/poll', requireAuth, ah(async (req, res) => {
   const ids = await friendIds(req.userId)
   await bumpPresence(req.userId)
+  // Запоминаем IP игрока для админки (только когда он меняется).
+  await query('UPDATE users SET last_ip = $1 WHERE id = $2 AND last_ip IS DISTINCT FROM $1', [
+    clientIp(req),
+    req.userId,
+  ])
   const presence = []
   for (const id of ids) {
     const user = (await query('SELECT * FROM users WHERE id = $1', [id])).rows[0]

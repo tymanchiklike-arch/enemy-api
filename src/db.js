@@ -39,6 +39,14 @@ const ensureSchema = () => {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_username TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_avatar TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS roles TEXT NOT NULL DEFAULT '[]';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS banner TEXT NOT NULL DEFAULT '';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS last_ip TEXT;
+
+      CREATE TABLE IF NOT EXISTS ip_bans (
+        ip         TEXT PRIMARY KEY,
+        reason     TEXT,
+        created_at BIGINT NOT NULL
+      );
 
       CREATE TABLE IF NOT EXISTS device_codes (
         device_code TEXT PRIMARY KEY,
