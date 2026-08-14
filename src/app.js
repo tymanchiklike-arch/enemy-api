@@ -23,7 +23,7 @@ import {
   siteUserByToken,
   dropSiteSession,
   deviceByUserCode,
-  bindDeviceUser,
+  claimDeviceUser,
   saveMessage,
   chatPage,
   newIncomingMessages,
@@ -42,7 +42,7 @@ import {
   setUserRoles,
 } from './db.js'
 import { requireAuth, setSessionReader, signAccess, verifyAccess } from './auth.js'
-import { adminPage, approvePage, errorPage, sitePage } from './site.js'
+import { adminPage, errorPage, sitePage } from './site.js'
 
 const SRC_DIR = dirname(fileURLToPath(import.meta.url))
 const APP_ROOT = join(SRC_DIR, '..')
@@ -132,7 +132,7 @@ app.use('/v2', async (req, res, next) => {
   if (!ip) return next()
   try {
     const { rows } = await query('SELECT reason FROM ip_bans WHERE ip = $1', [ip])
-    if (rows[0]) return res.status(403).json({ message: 'Твой IP заблокирован' })
+    if (rows[0]) return res.status(403).json({ message: 'Твой IP заблокирован', banned: true })
   } catch {}
   next()
 })
@@ -273,6 +273,15 @@ app.get('/v2/auth/discord/callback', ah(async (req, res) => {
 // ============ Сайт ============
 
 app.get('/', ah(async (req, res) => {
+  const banIp = clientIp(req)
+  if (banIp) {
+    const { rows } = await query('SELECT reason FROM ip_bans WHERE ip = $1', [banIp])
+    if (rows[0]) {
+      return res
+        .set('Content-Type', 'text/html; charset=utf-8')
+        .send(errorPage('Доступ заблокирован', 'Твой IP заблокирован администратором. Если это ошибка — обратись к владельцу.'))
+    }
+  }
   const user = await siteUserByToken(readCookie(req, SESSION_COOKIE))
   res
     .set('Content-Type', 'text/html; charset=utf-8')
@@ -318,11 +327,25 @@ const setAdminCookie = (res) =>
 const clearAdminCookie = (res) =>
   res.set('Set-Cookie', `${ADMIN_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`)
 
-app.get('/admin', (req, res) => {
+/// Доступ в админку: пароль-кука или привязанный Discord-админ (владелец
+/// выдаёт доступ в самой панели). Discord-админ заходит через сайт (OAuth).
+const isAdmin = async (req) => {
+  if (adminOk(req)) return true
+  const user = await siteUserByToken(readCookie(req, SESSION_COOKIE))
+  if (!user || !user.discord_id) return false
+  const { rows } = await query('SELECT 1 FROM admins WHERE discord_id = $1', [user.discord_id])
+  return rows.length > 0
+}
+
+app.get('/admin', ah(async (req, res) => {
   res
     .set('Content-Type', 'text/html; charset=utf-8')
-    .send(adminPage({ authed: adminOk(req), passwordSet: Boolean(process.env.ADMIN_PASSWORD), loginError: req.query.error === '1' }))
-})
+    .send(adminPage({
+      authed: await isAdmin(req),
+      passwordSet: Boolean(process.env.ADMIN_PASSWORD),
+      loginError: req.query.error === '1',
+    }))
+}))
 
 app.post('/admin', express.urlencoded({ extended: false }), (req, res) => {
   if (typeof req.body.password === 'string' && req.body.password === ADMIN_PASSWORD) {
@@ -338,7 +361,7 @@ app.get('/admin/logout', (req, res) => {
 })
 
 app.get('/v2/admin/users', ah(async (req, res) => {
-  if (!adminOk(req)) return res.status(401).json({ message: 'нет доступа' })
+  if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
   const { rows } = await query(
     'SELECT id, nickname, discord_id, discord_username, email, roles, last_ip, created_at FROM users ORDER BY created_at DESC LIMIT 500',
   )
@@ -357,13 +380,13 @@ app.get('/v2/admin/users', ah(async (req, res) => {
 }))
 
 app.get('/v2/admin/bans', ah(async (req, res) => {
-  if (!adminOk(req)) return res.status(401).json({ message: 'нет доступа' })
+  if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
   const { rows } = await query('SELECT ip, reason, created_at FROM ip_bans ORDER BY created_at DESC LIMIT 500')
   res.json({ bans: rows.map((r) => ({ ip: r.ip, reason: r.reason || '', created_at: r.created_at })) })
 }))
 
 app.post('/v2/admin/ban', ah(async (req, res) => {
-  if (!adminOk(req)) return res.status(401).json({ message: 'нет доступа' })
+  if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
   const ip = String((req.body && req.body.ip) || '').trim()
   const reason = String((req.body && req.body.reason) || '').trim().slice(0, 200)
   if (!ip || /\s/.test(ip) || ip.length > 64) return res.status(400).json({ message: 'IP не подходит' })
@@ -375,7 +398,7 @@ app.post('/v2/admin/ban', ah(async (req, res) => {
 }))
 
 app.post('/v2/admin/unban', ah(async (req, res) => {
-  if (!adminOk(req)) return res.status(401).json({ message: 'нет доступа' })
+  if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
   const ip = String((req.body && req.body.ip) || '').trim()
   if (!ip) return res.status(400).json({ message: 'нет ip' })
   await query('DELETE FROM ip_bans WHERE ip = $1', [ip])
@@ -383,7 +406,7 @@ app.post('/v2/admin/unban', ah(async (req, res) => {
 }))
 
 app.post('/v2/admin/set-roles', ah(async (req, res) => {
-  if (!adminOk(req)) return res.status(401).json({ message: 'нет доступа' })
+  if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
   const id = Number(req.body && req.body.id)
   const nick = String((req.body && req.body.nickname) || '').trim()
   const roles = Array.isArray(req.body && req.body.roles) ? req.body.roles : []
@@ -400,7 +423,7 @@ app.post('/v2/admin/set-roles', ah(async (req, res) => {
 }))
 
 app.post('/v2/admin/set-nick', ah(async (req, res) => {
-  if (!adminOk(req)) return res.status(401).json({ message: 'нет доступа' })
+  if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
   const id = Number(req.body && req.body.id)
   const nick = normalizeNick(req.body && req.body.nickname)
   if (!id || nick.length < 2 || !NICK_RE.test(nick)) return res.status(400).json({ message: 'ник не подходит' })
@@ -414,10 +437,106 @@ app.post('/v2/admin/set-nick', ah(async (req, res) => {
 }))
 
 app.post('/v2/admin/delete-user', ah(async (req, res) => {
-  if (!adminOk(req)) return res.status(401).json({ message: 'нет доступа' })
+  if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
   const id = Number(req.body && req.body.id)
   if (!id) return res.status(400).json({ message: 'нет id' })
   await query('DELETE FROM users WHERE id = $1', [id])
+  res.json({ ok: true })
+}))
+
+// ============ Админка: запросы на вход и доступ по Discord ============
+
+app.get('/v2/admin/login-requests', ah(async (req, res) => {
+  if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
+  const now = Math.floor(Date.now() / 1000)
+  const { rows } = await query(
+    `SELECT d.device_code, d.user_code, d.user_id, d.created_at, d.expires_at, d.status,
+            u.nickname, u.discord_username, u.discord_avatar
+     FROM device_codes d LEFT JOIN users u ON u.id = d.user_id
+     WHERE d.expires_at > $1
+     ORDER BY d.created_at DESC LIMIT 100`,
+    [now],
+  )
+  res.json({
+    requests: rows.map((r) => ({
+      deviceCode: r.device_code,
+      userCode: r.user_code,
+      userId: r.user_id ? String(r.user_id) : null,
+      nickname: r.nickname || null,
+      discordName: r.discord_username || null,
+      avatarUrl: r.discord_avatar || null,
+      status: r.status,
+      createdAt: r.created_at,
+      expiresAt: r.expires_at,
+    })),
+  })
+}))
+
+app.post('/v2/admin/login-approve', ah(async (req, res) => {
+  if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
+  const code = String((req.body && req.body.deviceCode) || '')
+  if (!code) return res.status(400).json({ message: 'нет кода' })
+  const { rows } = await query('SELECT * FROM device_codes WHERE device_code = $1', [code])
+  const row = rows[0]
+  if (!row || row.expires_at < Math.floor(Date.now() / 1000)) {
+    return res.status(404).json({ message: 'Код устарел — начни вход заново' })
+  }
+  await query('UPDATE device_codes SET status = $1, accepted_at = $2 WHERE device_code = $3', [
+    'accepted',
+    Math.floor(Date.now() / 1000),
+    code,
+  ])
+  res.json({ ok: true })
+}))
+
+app.post('/v2/admin/login-deny', ah(async (req, res) => {
+  if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
+  const code = String((req.body && req.body.deviceCode) || '')
+  if (!code) return res.status(400).json({ message: 'нет кода' })
+  await query('UPDATE device_codes SET status = $1 WHERE device_code = $2', ['denied', code])
+  res.json({ ok: true })
+}))
+
+app.get('/v2/admin/admins', ah(async (req, res) => {
+  if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
+  const { rows } = await query(
+    `SELECT a.discord_id, a.created_at, u.nickname, u.discord_username
+     FROM admins a LEFT JOIN users u ON u.discord_id = a.discord_id
+     ORDER BY a.created_at ASC`,
+  )
+  res.json({
+    admins: rows.map((r) => ({
+      discordId: r.discord_id,
+      nickname: r.nickname || null,
+      discordName: r.discord_username || null,
+      createdAt: r.created_at,
+    })),
+  })
+}))
+
+app.post('/v2/admin/admins', ah(async (req, res) => {
+  if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
+  const nick = String((req.body && req.body.nickname) || '').trim()
+  const id = Number(req.body && req.body.id) || 0
+  const { rows } = id
+    ? await query('SELECT id, discord_id FROM users WHERE id = $1', [id])
+    : await query('SELECT id, discord_id FROM users WHERE LOWER(nickname) = LOWER($1) LIMIT 1', [nick])
+  const u = rows[0]
+  if (!u || !u.discord_id) {
+    return res.status(404).json({ message: 'Игрок не найден или у него не привязан Discord' })
+  }
+  await query(
+    'INSERT INTO admins (discord_id, created_at) VALUES ($1,$2) ON CONFLICT (discord_id) DO NOTHING',
+    [u.discord_id, Date.now()],
+  )
+  res.json({ ok: true })
+}))
+
+app.post('/v2/admin/admins/remove', ah(async (req, res) => {
+  if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
+  const discordId = String((req.body && req.body.discordId) || '')
+  if (!discordId) return res.status(400).json({ message: 'нет discord_id' })
+  await query('DELETE FROM admins WHERE discord_id = $1', [discordId])
   res.json({ ok: true })
 }))
 
@@ -433,20 +552,21 @@ app.get('/v2/auth/launcher/approve', ah(async (req, res) => {
     return res.set('Content-Type', 'text/html; charset=utf-8').send(errorPage('Код не найден', 'Код из лаунчера истёк или уже недействителен. Вернись в лаунчер и начни вход заново.'))
   }
   if (row.status === 'denied') {
-    return res.set('Content-Type', 'text/html; charset=utf-8').send(errorPage('Вход отклонён', 'Ты сам отклонил этот вход в лаунчер.'))
+    return res.set('Content-Type', 'text/html; charset=utf-8').send(errorPage('Вход отклонён', 'Этот вход отклонил администратор.'))
+  }
+  if (row.status === 'accepted') {
+    return res.set('Content-Type', 'text/html; charset=utf-8').send(errorPage('Вход одобрен', 'Вход уже подтверждён — возвращайся в лаунчер.'))
   }
   const user = await siteUserByToken(readCookie(req, SESSION_COOKIE))
   if (!user) {
     const back = encodeURIComponent('/v2/auth/launcher/approve?device_code=' + req.query.device_code)
     return res.redirect(SITE_PAGE + '?redirect=' + back)
   }
+  // Привязываем личность к коду, но подтверждает админ в панели.
+  await claimDeviceUser(row.device_code, user.id)
   res
     .set('Content-Type', 'text/html; charset=utf-8')
-    .send(approvePage({
-      user: { nickname: user.nickname, discordName: user.discord_username, avatarUrl: user.discord_avatar },
-      deviceCode: row.device_code,
-      userCode: row.user_code,
-    }))
+    .send(errorPage('Заявка отправлена', 'Аккаунт ' + user.nickname.replace(/[<>&"]/g, '') + ' привязан к коду ' + row.user_code + '. Подтверждение придёт от администратора — вернись в лаунчер и подожди.'))
 }))
 
 app.post('/v2/auth/launcher/accept', express.urlencoded({ extended: false }), ah(async (req, res) => {
@@ -463,12 +583,8 @@ app.post('/v2/auth/launcher/accept', express.urlencoded({ extended: false }), ah
     const back = encodeURIComponent('/v2/auth/launcher/approve?device_code=' + row.device_code)
     return res.redirect(SITE_PAGE + '?redirect=' + back)
   }
-  await bindDeviceUser(row.device_code, user.id)
-  ru().send(`<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Готово</title></head>
-<body style="background:#08090A;color:#EDEFEE;font-family:system-ui;display:grid;place-items:center;min-height:100vh;margin:0">
-<div style="text-align:center;max-width:400px"><h2>Готово!</h2>
-<p style="color:rgba(237,239,238,.7)">Возвращайся в лаунчер — под ником ${user.nickname.replace(/[<>&"]/g, '')} ты вошёл.</p>
-<a href="/" style="color:#3EA6FF">Открыть сайт</a></div></body></html>`)
+  await claimDeviceUser(row.device_code, user.id)
+  ru().send(errorPage('Заявка отправлена', 'Аккаунт ' + user.nickname.replace(/[<>&"]/g, '') + ' привязан к коду. Подтверждение придёт от администратора — вернись в лаунчер и подожди.'))
 }))
 
 /// Ввод кода на самом сайте (а не только переход по ссылке из лаунчера).
@@ -480,8 +596,8 @@ app.post('/v2/site/launcher/link', requireAuth, ah(async (req, res) => {
   if (!row || row.expires_at < now) return res.status(404).json({ message: 'Код не найден или истёк — начни вход в лаунчере заново' })
   if (row.status === 'denied') return res.status(400).json({ message: 'Этот вход отклонён' })
   if (row.status === 'accepted') return res.json({ ok: true })
-  await bindDeviceUser(row.device_code, req.userId)
-  res.json({ ok: true })
+  await claimDeviceUser(row.device_code, req.userId)
+  res.json({ ok: true, waiting: true })
 }))
 
 app.post('/v2/auth/launcher/poll', ah(async (req, res) => {

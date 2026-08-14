@@ -354,6 +354,8 @@ export const adminPage = ({ authed, passwordSet, loginError }) => {
       <input type="password" name="password" placeholder="Пароль" autocomplete="current-password" />
       <button class="btn" type="submit" style="width:100%">Войти</button>
     </form>
+    <p class="sub">Или войди как Discord-админ, которому владелец выдал доступ:</p>
+    <a class="btn" href="/v2/auth/discord?redirect=/admin" style="width:100%;box-sizing:border-box">Войти через Discord</a>
     ${loginError ? '<p class="msg err">Неверный пароль — попробуй ещё раз.</p>' : ''}
   </div>
 </div>
@@ -389,6 +391,22 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
       <button class="btn" id="banAdd" style="flex:none">Забанить</button>
     </div>
     <div id="banList" style="margin-top:12px"></div>
+  </div>
+
+  <div class="sechead" style="margin-top:26px"><span class="bar"></span><h2>Запросы на вход</h2></div>
+  <p class="secd">Когда кто-то входит в лаунчер, код привязывается к аккаунту, и здесь появляется заявка — подтверждаешь или отклоняешь её ты. Обновляется автоматически.</p>
+  <div class="panel" style="padding:8px 16px">
+    <div id="loginReqs" style="min-height:24px"></div>
+  </div>
+
+  <div class="sechead" style="margin-top:26px"><span class="bar"></span><h2>Доступ администраторов</h2></div>
+  <p class="secd">Выдай доступ к админ-панели по нику: человек войдёт на сайт через Discord — и откроется панель без пароля.</p>
+  <div class="panel" style="padding:16px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input id="admNick" placeholder="Ник игрока (Enemy)" style="flex:1;min-width:200px;padding:8px 10px;font-size:13px" />
+      <button class="btn" id="admAdd" style="flex:none">Дать доступ</button>
+    </div>
+    <div id="admList" style="margin-top:12px"></div>
   </div>
 
   <a href="/admin/logout" style="color:var(--mut);font-size:13.5px;display:inline-block;margin-top:16px">Выйти из админки →</a>
@@ -491,6 +509,73 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
   if (banIpEl) banIpEl.addEventListener('keydown', banEnter)
   if (banReasonEl) banReasonEl.addEventListener('keydown', banEnter)
   loadBans()
+
+  function renderReqs(list) {
+    var el = document.getElementById('loginReqs')
+    if (!el) return
+    if (!list.length) { el.innerHTML = '<p style="color:var(--faint);font-size:13px;padding:8px 0">Заявок пока нет.</p>'; return }
+    el.innerHTML = list.map(function (r) {
+      var who = r.nickname ? esc2(r.nickname) : (r.discordName ? esc2(r.discordName) : 'Не определён')
+      var who2 = r.nickname && r.discordName ? ' <span style="color:var(--faint)">· ' + esc2(r.discordName) + '</span>' : ''
+      var ava = r.avatarUrl ? '<img src="' + esc2(r.avatarUrl) + '" style="width:26px;height:26px;border-radius:50%;flex:none" />' : '<span style="width:26px;height:26px;border-radius:50%;background:var(--line);flex:none"></span>'
+      var st = r.status === 'accepted' ? ' <b style="color:#7dff6b">одобрен</b>' : r.status === 'denied' ? ' <b style="color:#ff5f57">отклонён</b>' : ' <b style="color:#ffd83d">ждёт</b>'
+      var acts = r.status === 'pending'
+        ? '<button class="btn sm" data-approve="' + esc2(r.deviceCode) + '" style="margin-right:8px">Одобрить</button><button class="btn sm danger" data-deny="' + esc2(r.deviceCode) + '">Отклонить</button>'
+        : ''
+      return '<div style="display:flex;gap:12px;align-items:center;padding:9px 0;border-top:1px solid var(--line)">' + ava +
+        '<div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700">' + who + who2 + '</div>' +
+        '<div style="color:var(--faint);font-size:12px">Код ' + esc2(r.userCode || '') + ' · ' + human2(r.createdAt) + '</div></div>' +
+        '<span style="white-space:nowrap">' + st + '</span>' + acts + '</div>'
+    }).join('')
+  }
+  function loadReqs() {
+    fetch('/v2/admin/login-requests').then(function (r) {
+      if (r.status === 401) return
+      return r.json().then(function (d) { renderReqs(d.requests || []) })
+    }).catch(function () {})
+  }
+  loadReqs()
+  setInterval(loadReqs, 3000)
+
+  function renderAdmins(list) {
+    var el = document.getElementById('admList')
+    if (!el) return
+    if (!list.length) { el.innerHTML = '<p style="color:var(--faint);font-size:13px">Никого нет. Выдай доступ по нику игрока.</p>'; return }
+    el.innerHTML = list.map(function (a) {
+      return '<div style="display:flex;gap:10px;align-items:center;padding:8px 2px;border-top:1px solid var(--line)">' +
+        '<b style="font-size:13.5px">' + esc2(a.nickname || a.discordName || a.discordId) + '</b>' +
+        (a.discordName && a.nickname ? '<span style="color:var(--faint);font-size:12.5px">' + esc2(a.discordName) + '</span>' : '') +
+        '<span style="flex:1"></span>' +
+        '<button class="btn sm danger" data-remadm="' + esc2(a.discordId) + '">Убрать</button></div>'
+    }).join('')
+  }
+  function loadAdmins() {
+    fetch('/v2/admin/admins').then(function (r) {
+      if (r.status === 401) return
+      return r.json().then(function (d) { renderAdmins(d.admins || []) })
+    }).catch(function () {})
+  }
+  var admAdd = document.getElementById('admAdd')
+  if (admAdd) admAdd.onclick = function () {
+    var nick = document.getElementById('admNick').value.trim()
+    if (!nick) { msg('Введи ник'); return }
+    admAdd.disabled = true
+    fetch('/v2/admin/admins', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname: nick })
+    }).then(function (r) {
+      return r.json().then(function (d) {
+        if (!r.ok) { msg(d.message || 'Не получилось'); return }
+        msg('Доступ выдан: ' + nick)
+        document.getElementById('admNick').value = ''
+        loadAdmins()
+      })
+    }).catch(function () { msg('Ошибка сети') }).then(function () { admAdd.disabled = false })
+  }
+  var admNickEl = document.getElementById('admNick')
+  if (admNickEl) admNickEl.addEventListener('keydown', function (e) { if (e.key === 'Enter' && admAdd) admAdd.onclick() })
+  loadAdmins()
   fetch('/v2/admin/users').then(function (r) {
     if (r.status === 401) { msg('Сессия истекла — перезайди под паролем.'); location.href = '/admin'; return }
     return r.json().then(function (d) { render(d.users || []) })
@@ -535,6 +620,41 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
           if (!r.ok) { msg(d.message || 'Не получилось'); return }
           msg('Разбанен: ' + ubIp)
           loadBans()
+        })
+      }).catch(function () { msg('Ошибка сети') })
+      return
+    }
+    var ap = e.target.closest('button[data-approve],button[data-deny]')
+    if (ap) {
+      var apCode = ap.getAttribute('data-approve') || ap.getAttribute('data-deny')
+      var apAct = ap.hasAttribute('data-approve') ? 'approve' : 'deny'
+      if (apAct === 'deny' && !confirm('Отклонить этот вход?')) return
+      fetch('/v2/admin/login-' + apAct, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceCode: apCode })
+      }).then(function (r) {
+        return r.json().then(function (d) {
+          if (!r.ok) { msg(d.message || 'Не получилось'); return }
+          msg(apAct === 'approve' ? 'Вход одобрен' : 'Вход отклонён')
+          loadReqs()
+        })
+      }).catch(function () { msg('Ошибка сети') })
+      return
+    }
+    var ra = e.target.closest('button[data-remadm]')
+    if (ra) {
+      var raDiscord = ra.getAttribute('data-remadm')
+      if (!confirm('Убрать этого администратора?')) return
+      fetch('/v2/admin/admins/remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ discordId: raDiscord })
+      }).then(function (r) {
+        return r.json().then(function (d) {
+          if (!r.ok) { msg(d.message || 'Не получилось'); return }
+          msg('Доступ убран')
+          loadAdmins()
         })
       }).catch(function () { msg('Ошибка сети') })
       return
@@ -602,6 +722,7 @@ export const SITE_SCRIPT = `(function () {
     fetch('/v2/site/launcher/link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: code }) })
       .then(function (r) { return r.json().catch(function () { return {} }).then(function (d) {
         if (!r.ok) return msg(linkMsg, d.message || 'Код не подошёл')
+        if (d.waiting) return msg(linkMsg, 'Заявка отправлена — жди подтверждения администратора.', true)
         msg(linkMsg, 'Готово! Возвращайся в лаунчер — вход выполнен.', true)
       }) })
       .catch(function () { msg(linkMsg, 'Сеть недоступна — попробуй ещё раз') })

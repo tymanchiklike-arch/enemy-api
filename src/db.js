@@ -48,6 +48,11 @@ const ensureSchema = () => {
         created_at BIGINT NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS admins (
+        discord_id TEXT PRIMARY KEY,
+        created_at BIGINT NOT NULL
+      );
+
       CREATE TABLE IF NOT EXISTS device_codes (
         device_code TEXT PRIMARY KEY,
         user_code   TEXT NOT NULL,
@@ -535,5 +540,14 @@ export const bindDeviceUser = async (deviceCode, userId) => {
   await query(
     'UPDATE device_codes SET user_id = $1, status = $2, accepted_at = $3 WHERE device_code = $4',
     [userId, 'accepted', Math.floor(Date.now() / 1000), deviceCode],
+  )
+}
+
+/// Только привязывает личность к коду, не подтверждая вход: финальное решение
+/// принимает админ в панели (approve/deny).
+export const claimDeviceUser = async (deviceCode, userId) => {
+  await query(
+    'UPDATE device_codes SET user_id = $1 WHERE device_code = $2 AND status = $3',
+    [userId, deviceCode, 'pending'],
   )
 }
