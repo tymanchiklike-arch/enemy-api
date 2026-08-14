@@ -366,7 +366,7 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
   <div class="sechead"><span class="bar"></span><h2>Админ-панель</h2></div>
   <p class="secd">Пользователи Enemy: смена ника, удаление аккаунта, выдача бейджа (Owner / Admin / Moder / Tester — один на игрока) по нику или id. Бейдж показывается в лаунчере рядом с ником.</p>
   <div class="panel" style="padding:0;overflow:hidden">
-    <table style="width:100%;border-collapse:collapse;font-size:13.5px">
+    <table class="admin-table" style="width:100%;border-collapse:collapse;font-size:13.5px">
       <thead><tr style="text-align:left;color:var(--faint);font-size:11px;letter-spacing:.08em;text-transform:uppercase">
         <th style="padding:14px 16px">#</th>
         <th style="padding:14px 8px">Ник</th>
@@ -389,6 +389,7 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
 .role-chip[data-role="moder"].on{background:#7dff6b;color:#000}
 .role-chip[data-role="tester"].on{background:#6be8ff;color:#000}
 .role-chip:disabled{opacity:.5;cursor:default}
+.admin-table th,.admin-table td{vertical-align:middle}
 </style>
 <script>
 (function () {
@@ -464,6 +465,7 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
     b.disabled = true
     fetch('/v2/admin/' + (act === 'del' ? 'delete-user' : 'set-nick'), {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     }).then(function (r) {
       return r.json().then(function (d) {
