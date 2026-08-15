@@ -413,7 +413,7 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
 
   <nav class="adm-nav" id="admNav">
     <button class="adm-tab on" data-tab="users">${ICON('ic-users')}Игроки<span class="adb" id="ctUsers"></span></button>
-    <button class="adm-tab" data-tab="reqs">${ICON('ic-key')}Вход<span class="adb warn" id="ctReqs"></span></button>
+    <button class="adm-tab" data-tab="reqs">${ICON('ic-key')}Обжалование<span class="adb warn" id="ctAppeals"></span></button>
     <button class="adm-tab" data-tab="bans">${ICON('ic-shield')}Баны<span class="adb" id="ctBans"></span></button>
     <button class="adm-tab" data-tab="admins">${ICON('ic-lock')}Доступ<span class="adb" id="ctAdmins"></span></button>
   </nav>
@@ -435,12 +435,11 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
 
   <section class="adm-pane" id="pane-reqs">
     <div class="adm-card">
-      <div class="adm-h"><h3>Запросы на вход</h3></div>
-      <p class="secd">Код привязывается к аккаунту — подтверди или отклони вход. Обновляется автоматически.</p>
+      <div class="adm-h"><h3>Обжалование</h3></div>
+      <p class="secd">Забаненный игрок начал вход в лаунчер — это его обжалование. Приняв его, ты снимаешь бан и пускаешь вход. Обновляется автоматически.</p>
       <div class="adm-chips" id="reqCats">
         <button class="adm-chip on" data-cat="pending">Ожидают</button>
-        <button class="adm-chip" data-cat="frozen">Забаненные</button>
-        <button class="adm-chip" data-cat="accepted">Одобренные</button>
+        <button class="adm-chip" data-cat="accepted">Принятые</button>
         <button class="adm-chip" data-cat="denied">Отклонённые</button>
       </div>
       <div id="loginReqs" class="adm-list"></div>
@@ -450,7 +449,7 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
   <section class="adm-pane" id="pane-bans">
     <div class="adm-card">
       <div class="adm-h"><h3>Бан аккаунта</h3></div>
-      <p class="secd">Блокирует сам аккаунт: вход в лаунчер и на сайт закрыт, у игрока идёт заявка администратору.</p>
+      <p class="secd">Блокирует сам аккаунт: вход в лаунчер и на сайт закрыт, у игрока идёт обжалование администратору.</p>
       <div class="adm-row">
         <input id="abanNick" placeholder="Ник игрока (Enemy)" />
         <input id="abanReason" placeholder="Причина (необязательно)" />
@@ -516,6 +515,8 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
 .admin-table thead th.r{text-align:right}
 .admin-table th,.admin-table td{vertical-align:middle}
 .admin-table .btn.sm{padding:8px 11px;font-size:12.5px;border-radius:8px}
+.copy-ip{cursor:pointer;color:var(--acc);border-bottom:1px dashed rgba(62,166,255,.4);padding-bottom:1px;transition:opacity .15s}
+.copy-ip:hover{opacity:.75}
 .adm-st{margin-top:12px;color:var(--mut);font-size:13px;min-height:18px}
 .req-st{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:800;padding:4px 9px;border-radius:99px;white-space:nowrap}
 .req-st::before{content:'';width:6px;height:6px;border-radius:50%}
@@ -593,13 +594,11 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
         (u.banned ? ' <span style="color:#ff5f57;font-weight:800;font-size:11px">ЗАБАНЕН</span>' : '') + '</td>' +
         '<td style="padding:10px 8px;color:var(--mut)">' + esc2(u.discord_username || (u.discord_id ? '#' + u.discord_id : '—')) + '</td>' +
         '<td style="padding:10px 8px;white-space:nowrap;min-width:180px">' + chips + '</td>' +
-        '<td style="padding:10px 8px;white-space:nowrap">' + (u.last_ip ? esc2(u.last_ip) : '<span style="color:var(--faint)">—</span>') + '</td>' +
+        '<td style="padding:10px 8px;white-space:nowrap">' + (u.last_ip
+          ? '<span class="copy-ip" data-ip="' + esc2(u.last_ip) + '" title="Копировать IP">' + esc2(u.last_ip) + '</span>'
+          : '<span style="color:var(--faint)">—</span>') + '</td>' +
         '<td style="padding:10px 8px;color:var(--faint);white-space:nowrap">' + human(u.created_at) + '</td>' +
         '<td style="padding:10px 16px;text-align:right;white-space:nowrap">' +
-          (u.last_ip ? '<button class="btn sm" data-a="ban" data-uid="' + u.id + '" style="margin-right:8px">Бан по IP</button>' : '') +
-          (u.banned
-            ? '<button class="btn sm" data-a="unfreeze" data-uid="' + u.id + '" style="margin-right:8px">Разбан</button>'
-            : '<button class="btn sm" data-a="freeze" data-uid="' + u.id + '" style="margin-right:8px">Бан</button>') +
           '<button class="btn sm" data-a="set" data-uid="' + u.id + '" style="margin-right:8px">Сохранить</button>' +
           '<button class="btn sm danger" data-a="del" data-uid="' + u.id + '">Удалить</button></td>'
       rows.appendChild(tr)
@@ -629,10 +628,6 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
       if (r.status === 401) return
       return r.json().then(function (d) { renderBans(d.bans || []) })
     }).catch(function () {})
-  }
-  function prefillBan(ip) {
-    var inp = document.getElementById('banIp')
-    if (inp) { inp.value = ip || ''; inp.focus() }
   }
   var banAdd = document.getElementById('banAdd')
   if (banAdd) banAdd.onclick = function () {
@@ -710,10 +705,9 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
   loadAccountBans()
 
   function reqInCat(r) {
-    if (reqCat === 'frozen') return r.status === 'pending' && !!r.banned
     if (reqCat === 'accepted') return r.status === 'accepted'
     if (reqCat === 'denied') return r.status === 'denied'
-    return r.status === 'pending' && !r.banned
+    return r.status === 'pending'
   }
   function renderReqs(list) {
     var el = document.getElementById('loginReqs')
@@ -726,12 +720,11 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
       var who2 = r.nickname && r.discordName ? ' <span style="color:var(--faint)">· ' + esc2(r.discordName) + '</span>' : ''
       var ava = r.avatarUrl ? '<img src="' + esc2(r.avatarUrl) + '" style="width:28px;height:28px;border-radius:50%;flex:none" />' : '<span style="width:28px;height:28px;border-radius:50%;background:var(--line);flex:none"></span>'
       var stCls, stTxt
-      if (r.status === 'accepted') { stCls = 'ok'; stTxt = 'одобрен' }
-      else if (r.status === 'denied') { stCls = 'no'; stTxt = 'отклонён' }
-      else if (r.banned) { stCls = 'frozen'; stTxt = 'забанен' }
-      else { stCls = 'wait'; stTxt = 'ждёт' }
+      if (r.status === 'accepted') { stCls = 'ok'; stTxt = 'принято' }
+      else if (r.status === 'denied') { stCls = 'no'; stTxt = 'отклонено' }
+      else { stCls = 'wait'; stTxt = 'ждёт решения' }
       var acts = r.status === 'pending'
-        ? '<button class="btn sm" data-approve="' + esc2(r.deviceCode) + '" style="margin-right:8px">Одобрить</button><button class="btn sm danger" data-deny="' + esc2(r.deviceCode) + '">Отклонить</button>'
+        ? '<button class="btn sm" data-approve="' + esc2(r.deviceCode) + '" style="margin-right:8px">Принять</button><button class="btn sm danger" data-deny="' + esc2(r.deviceCode) + '">Отклонить</button>'
         : ''
       return '<div style="display:flex;gap:12px;align-items:center;padding:12px 4px">' + ava +
         '<div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700">' + who + who2 + '</div>' +
@@ -745,7 +738,7 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
       if (r.status === 401) return
       return r.json().then(function (d) {
         var reqs = d.requests || []
-        setCount('ctReqs', reqs.filter(function (x) { return x.status === 'pending' }).length)
+        setCount('ctAppeals', reqs.filter(function (x) { return x.status === 'pending' }).length)
         renderReqs(reqs)
       })
     }).catch(function () {})
@@ -807,6 +800,15 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
     return out
   }
   document.addEventListener('click', function (e) {
+    var cip = e.target.closest('.copy-ip')
+    if (cip) {
+      var cipVal = cip.getAttribute('data-ip')
+      function copied() { msg('IP скопирован: ' + cipVal) }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(cipVal).then(copied).catch(copied)
+      } else copied()
+      return
+    }
     var chip = e.target.closest('button.role-chip')
     if (chip) {
       var uid = chip.getAttribute('data-uid')
@@ -866,7 +868,7 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
     if (ap) {
       var apCode = ap.getAttribute('data-approve') || ap.getAttribute('data-deny')
       var apAct = ap.hasAttribute('data-approve') ? 'approve' : 'deny'
-      if (apAct === 'deny' && !confirm('Отклонить этот вход?')) return
+      if (apAct === 'deny' && !confirm('Отклонить обжалование?')) return
       fetch('/v2/admin/login-' + apAct, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -874,8 +876,9 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
       }).then(function (r) {
         return r.json().then(function (d) {
           if (!r.ok) { msg(d.message || 'Не получилось'); return }
-          msg(apAct === 'approve' ? 'Вход одобрен' : 'Вход отклонён')
+          msg(apAct === 'approve' ? 'Обжалование принято — бан снят' : 'Обжалование отклонено')
           loadReqs()
+          loadUsers()
         })
       }).catch(function () { msg('Ошибка сети') })
       return
@@ -901,43 +904,6 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
     if (!b) return
     var uid = b.getAttribute('data-uid')
     var act = b.getAttribute('data-a')
-    if (act === 'ban') {
-      var ipTd = b.closest('tr').querySelectorAll('td')[4]
-      prefillBan(ipTd ? ipTd.textContent.trim() : '')
-      return
-    }
-    if (act === 'freeze') {
-      if (!confirm('Забанить аккаунт #' + uid + '?')) return
-      b.disabled = true
-      fetch('/v2/admin/ban-account', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: uid })
-      }).then(function (r) {
-        return r.json().then(function (d) {
-          if (!r.ok) { msg(d.message || 'Не получилось'); return }
-          msg('Аккаунт #' + uid + ' забанен')
-          loadUsers()
-        })
-      }).catch(function () { msg('Ошибка сети') }).then(function () { b.disabled = false })
-      return
-    }
-    if (act === 'unfreeze') {
-      if (!confirm('Разбанить аккаунт #' + uid + '?')) return
-      b.disabled = true
-      fetch('/v2/admin/unban-account', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: uid })
-      }).then(function (r) {
-        return r.json().then(function (d) {
-          if (!r.ok) { msg(d.message || 'Не получилось'); return }
-          msg('Аккаунт #' + uid + ' разбанен')
-          loadUsers()
-        })
-      }).catch(function () { msg('Ошибка сети') }).then(function () { b.disabled = false })
-      return
-    }
     if (act === 'del' && !confirm('Удалить пользователя #' + uid + '?')) return
     var body = act === 'del' ? { id: uid } : { id: uid, nickname: rows.querySelector('input[data-uid="' + uid + '"]').value }
     b.disabled = true

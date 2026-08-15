@@ -288,7 +288,7 @@ app.get('/', ah(async (req, res) => {
     clearSessionCookie(res)
     return res
       .set('Content-Type', 'text/html; charset=utf-8')
-      .send(errorPage('Аккаунт забанен', 'Твой аккаунт забанен администратором. Чтобы снять бан — начни вход в лаунчере: заявка уйдёт администратору, и он решит.'))
+      .send(errorPage('Аккаунт забанен', 'Твой аккаунт забанен администратором. Чтобы снять бан — начни вход в лаунчере: обжалование уйдёт администратору, и он решит.'))
   }
   res
     .set('Content-Type', 'text/html; charset=utf-8')
@@ -534,7 +534,7 @@ app.post('/v2/admin/login-approve', ah(async (req, res) => {
   const { rows } = await query('SELECT * FROM device_codes WHERE device_code = $1', [code])
   const row = rows[0]
   if (!row || row.expires_at < Math.floor(Date.now() / 1000)) {
-    return res.status(404).json({ message: 'Код устарел — начни вход заново' })
+    return res.status(404).json({ message: 'Обжалование устарело — начни вход заново' })
   }
   await query('UPDATE device_codes SET status = $1, accepted_at = $2 WHERE device_code = $3', [
     'accepted',
@@ -633,7 +633,7 @@ app.get('/v2/auth/launcher/approve', ah(async (req, res) => {
       .send(confirmPage({
         kind: 'frozen',
         title: 'Аккаунт забанен',
-        text: 'Аккаунт ' + safeNick + ' забанен администратором. Заявка на вход отправлена — вернись в лаунчер и дождись подтверждения.',
+        text: 'Аккаунт ' + safeNick + ' забанен администратором. Обжалование отправлено — вернись в лаунчер и дождись решения.',
         ...acc,
       }))
   }
@@ -671,7 +671,7 @@ app.post('/v2/auth/launcher/accept', express.urlencoded({ extended: false }), ah
     return ru().send(confirmPage({
       kind: 'frozen',
       title: 'Аккаунт забанен',
-      text: 'Аккаунт ' + safeNick + ' забанен администратором. Заявка на вход отправлена — вернись в лаунчер и дождись подтверждения.',
+      text: 'Аккаунт ' + safeNick + ' забанен администратором. Обжалование отправлено — вернись в лаунчер и дождись решения.',
       ...acc,
     }))
   }
