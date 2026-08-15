@@ -868,7 +868,9 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
     if (ap) {
       var apCode = ap.getAttribute('data-approve') || ap.getAttribute('data-deny')
       var apAct = ap.hasAttribute('data-approve') ? 'approve' : 'deny'
-      if (apAct === 'deny' && !confirm('Отклонить обжалование?')) return
+      if (apAct === 'approve') {
+        if (!confirm('Принять обжалование? Бан с аккаунта будет снят автоматически.')) return
+      } else if (!confirm('Отклонить обжалование? Бан останется.')) return
       fetch('/v2/admin/login-' + apAct, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -879,6 +881,7 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
           msg(apAct === 'approve' ? 'Обжалование принято — бан снят' : 'Обжалование отклонено')
           loadReqs()
           loadUsers()
+          loadAccountBans()
         })
       }).catch(function () { msg('Ошибка сети') })
       return

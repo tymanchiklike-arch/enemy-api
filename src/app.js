@@ -412,7 +412,7 @@ app.post('/v2/admin/unban-account', ah(async (req, res) => {
   if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
   const id = Number(req.body && req.body.id)
   if (!id) return res.status(400).json({ message: 'нет id' })
-  await query('UPDATE users SET banned = false, ban_reason = $1 WHERE id = $2', ['', id])
+  await query('UPDATE users SET banned = false, ban_reason = $1, ban_at = NULL WHERE id = $2', ['', id])
   res.json({ ok: true })
 }))
 
@@ -541,9 +541,9 @@ app.post('/v2/admin/login-approve', ah(async (req, res) => {
     Math.floor(Date.now() / 1000),
     code,
   ])
-  // Одобрение входа забаненного аккаунта одновременно снимает бан.
+  // Принятие обжалования автоматически снимает бан с аккаунта.
   if (row.user_id) {
-    await query('UPDATE users SET banned = false, ban_reason = $1 WHERE id = $2', ['', row.user_id])
+    await query('UPDATE users SET banned = false, ban_reason = $1, ban_at = NULL WHERE id = $2', ['', row.user_id])
   }
   res.json({ ok: true })
 }))
