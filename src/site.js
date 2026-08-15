@@ -1,15 +1,9 @@
-// Enemy — сайт с фирменным дизайном: уникальный шрифт, свои SVG-иконки,
-// анимации появления, аккуратные отступы. Здесь же админ-панель (/admin),
-// но ссылок на неё на публичных страницах нет.
-
 const esc = (s) =>
   String(s == null ? '' : s)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-
-// ============ Свои иконки (inline SVG, никаких эмодзи) ============
 
 const ICONS = `
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
@@ -31,8 +25,6 @@ const ICONS = `
 
 const ICON = (name, cls = 'ic') => `<svg class="${cls}"><use href="#${name}"/></svg>`
 
-// ============ Шрифты: уникальная пара (Unbounded + Manrope) ============
-
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;600;700;800;900&family=Manrope:wght@400;500;600;700;800&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
@@ -48,12 +40,9 @@ body{
 a{color:inherit;text-decoration:none}
 img,svg{display:block}
 ::selection{background:rgba(62,166,255,.3)}
-/* Без текстового курсора: страница выглядит как интерфейс, а не документ.
-   В полях ввода каретка остаётся (иначе невозможно печатать). */
 body{cursor:default;user-select:none;-webkit-user-select:none}
 input,textarea{user-select:text;-webkit-user-select:text;cursor:text}
 a,button,[role="button"],label{cursor:pointer}
-/* ===== Фон: сетка + свечение ===== */
 .bg-grid{position:fixed;inset:0;z-index:-1;pointer-events:none;
   background-image:linear-gradient(rgba(148,163,200,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,200,.045) 1px,transparent 1px);
   background-size:44px 44px;
@@ -65,14 +54,12 @@ a,button,[role="button"],label{cursor:pointer}
 .bg-glow::before{width:520px;height:520px;left:-140px;top:-120px;background:radial-gradient(circle,rgba(62,166,255,.22),transparent 70%)}
 .bg-glow::after{width:620px;height:620px;right:-200px;top:120px;background:radial-gradient(circle,rgba(62,166,255,.2),transparent 70%);animation-delay:-9s}
 @keyframes drift{from{transform:translateY(0) scale(1)}to{transform:translateY(60px) scale(1.1)}}
-/* ===== Появление при скролле ===== */
 .rv{opacity:0;transform:translateY(26px);transition:opacity .7s cubic-bezier(.22,.61,.36,1),transform .7s cubic-bezier(.22,.61,.36,1)}
 .rv.on{opacity:1;transform:none}
 .rv[data-d="1"]{transition-delay:.08s}
 .rv[data-d="2"]{transition-delay:.16s}
 .rv[data-d="3"]{transition-delay:.24s}
 @media (prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}.bg-glow::before,.bg-glow::after{animation:none}}
-/* ===== Навбар ===== */
 nav{position:sticky;top:0;z-index:30;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);background:rgba(10,14,20,.72);border-bottom:1px solid var(--line)}
 .nav{max-width:1120px;margin:0 auto;padding:16px 24px;display:flex;align-items:center;gap:22px}
 .brand{display:flex;align-items:center;gap:11px;font-family:'Unbounded',sans-serif;font-weight:700;font-size:17px;letter-spacing:.01em}
@@ -83,7 +70,6 @@ nav{position:sticky;top:0;z-index:30;backdrop-filter:blur(16px);-webkit-backdrop
 .nlinks a{padding:8px 12px;border-radius:9px;transition:color .2s,background .2s}
 .nlinks a:hover{color:var(--txt);background:rgba(148,163,200,.08)}
 @media (max-width:760px){.nlinks{display:none}}
-/* ===== Кнопки ===== */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;border:0;cursor:pointer;font-family:inherit;font-weight:700;font-size:14px;padding:12px 22px;border-radius:11px;color:#fff;background:linear-gradient(135deg,#3EA6FF,#1E8BE8);box-shadow:0 4px 18px rgba(62,166,255,.25);transition:transform .18s cubic-bezier(.34,1.56,.64,1),box-shadow .18s,filter .18s}
 .btn:hover{transform:translateY(-2px);filter:brightness(1.07);box-shadow:0 8px 26px rgba(62,166,255,.35)}
 .btn:active{transform:translateY(0)}
@@ -96,7 +82,6 @@ nav{position:sticky;top:0;z-index:30;backdrop-filter:blur(16px);-webkit-backdrop
 .btn.sm{padding:9px 15px;font-size:13px;border-radius:9px}
 .btn.danger{background:rgba(255,93,93,.14);color:#FF6B6B;border:1px solid rgba(255,93,93,.3);box-shadow:none}
 .btn .ic{width:17px;height:17px}
-/* ===== Hero ===== */
 .hero{max-width:1120px;margin:0 auto;padding:96px 24px 54px;text-align:center;position:relative}
 .overline{display:inline-flex;align-items:center;gap:9px;font-family:'Unbounded';font-size:10.5px;font-weight:600;letter-spacing:.22em;color:var(--acc);border:1px solid rgba(62,166,255,.3);border-radius:99px;padding:7px 16px;background:rgba(62,166,255,.07)}
 .overline .ic{width:14px;height:14px}
@@ -107,7 +92,6 @@ nav{position:sticky;top:0;z-index:30;backdrop-filter:blur(16px);-webkit-backdrop
 .plats{margin-top:30px;display:flex;gap:12px;justify-content:center;color:var(--faint);font-size:12.5px;font-weight:600;flex-wrap:wrap}
 .plats span{display:inline-flex;align-items:center;gap:7px}
 .plats span::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--acc);opacity:.6}
-/* ===== Секции ===== */
 .wrap{max-width:1120px;margin:0 auto;padding:0 24px 96px}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:22px;margin-top:52px}
 .panel{background:linear-gradient(180deg,rgba(22,30,48,.7),rgba(17,25,39,.7));border:1px solid var(--line);border-radius:18px;padding:30px;position:relative;overflow:hidden;transition:border-color .25s,transform .25s}
@@ -148,7 +132,6 @@ input::placeholder{color:var(--faint)}
 .tick{display:inline-flex;align-items:center;gap:9px;color:var(--mut);font-size:13.5px;background:rgba(22,30,48,.55);border:1px solid var(--line);padding:10px 15px;border-radius:99px;transition:border-color .2s,color .2s}
 .tick:hover{color:var(--txt);border-color:rgba(62,166,255,.3)}
 .tick .ic{width:15px;height:15px;color:var(--acc)}
-/* ===== Футер ===== */
 footer{border-top:1px solid var(--line);background:rgba(8,11,17,.6);padding:52px 24px 60px}
 .foot{max-width:1120px;margin:0 auto;display:flex;flex-wrap:wrap;gap:44px;justify-content:space-between}
 .foot .co{color:var(--mut);font-size:13px;line-height:1.75;max-width:300px;margin-top:14px}
@@ -156,7 +139,6 @@ footer{border-top:1px solid var(--line);background:rgba(8,11,17,.6);padding:52px
 .foot nav a{display:block;color:var(--mut);font-size:13.5px;margin-bottom:10px;transition:color .2s,transform .2s}
 .foot nav a:hover{color:var(--txt);transform:translateX(3px)}
 .legal{margin-top:44px;color:var(--faint);font-size:12px;line-height:1.7;max-width:900px}
-/* ===== Профиль (премиум) ===== */
 .panel.profile{padding:0;overflow:hidden;border-radius:22px}
 .prof-banner{position:relative;height:190px}
 .prof-banner::before{content:'';position:absolute;inset:0;background:linear-gradient(115deg,rgba(255,255,255,.16) 0%,rgba(255,255,255,.16) 18%,rgba(255,255,255,0) 42%)}
@@ -193,7 +175,13 @@ footer{border-top:1px solid var(--line);background:rgba(8,11,17,.6);padding:52px
 .sw-custom input[type="color"]{width:46px;height:40px;padding:3px;border-radius:10px;background:var(--panel);flex:none}
 .sw-custom input[type="text"]{width:130px;flex:none}
 .sw-custom .lab{margin:0}
-input[type="file"]{padding:10px;font-size:13px}
+.dropzone{display:flex;flex-direction:column;align-items:center;gap:10px;padding:26px 16px;border:1.5px dashed rgba(62,166,255,.35);border-radius:14px;background:rgba(62,166,255,.04);cursor:pointer;text-align:center;transition:border-color .2s,background .2s,transform .2s}
+.dropzone:hover,.dropzone.drag{border-color:var(--acc);background:rgba(62,166,255,.09)}
+.dropzone .dz-ic{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:rgba(62,166,255,.12);color:var(--acc);flex:none}
+.dropzone .dz-ic svg{width:20px;height:20px}
+.dropzone .dz-title{font-weight:800;font-size:14.5px}
+.dropzone .dz-sub{color:var(--mut);font-size:12px;line-height:1.5}
+.dropzone.busy{opacity:.55;pointer-events:none}
 .prof-back{display:inline-flex;align-items:center;gap:8px;color:var(--mut);font-size:13.5px;font-weight:600;margin:34px 0 0;transition:color .2s,transform .2s}
 .prof-back:hover{color:var(--txt);transform:translateX(-3px)}
 .prof-back .ic{width:16px;height:16px;transform:rotate(180deg)}
@@ -384,8 +372,6 @@ export const errorPage = (title, text) => HEAD(title) + NAV({ logged: '' }) + `
   </div>
 </div>` + FOOT
 
-// ============ Профиль на сайте (как в лаунчере) ============
-
 const BANNER_COLORS = [
   '#5b8cff', '#8b5cf6', '#ec4899', '#f43f5e', '#f59e0b',
   '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#f8fafc',
@@ -457,11 +443,11 @@ const PROFILE_SCRIPT = `
     var el = document.getElementById('profAva')
     if (el) el.outerHTML = '<img class="prof-ava" id="profAva" src="' + esc(src) + '" alt="" />'
   }
-  var avaBtn = document.getElementById('avaBtn')
   var avaFile = document.getElementById('avaFile')
+  var avaDrop = document.getElementById('avaDrop')
   var avaClear = document.getElementById('avaClear')
   function patchAvatar(b64, msgEl) {
-    avaBtn.disabled = true
+    if (avaDrop) avaDrop.classList.add('busy')
     if (avaClear) avaClear.disabled = true
     fetch('/v2/users/me', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ avatar: b64 }) })
       .then(function (r) { return r.json().catch(function () { return {} }).then(function (d) {
@@ -472,9 +458,9 @@ const PROFILE_SCRIPT = `
         if (avaFile) avaFile.value = ''
       }) })
       .catch(function () { msg(msgEl, 'Сеть недоступна — попробуй ещё раз') })
-      .then(function () { avaBtn.disabled = false; if (avaClear) avaClear.disabled = false })
+      .then(function () { if (avaDrop) avaDrop.classList.remove('busy'); if (avaClear) avaClear.disabled = false })
   }
-  if (avaBtn && avaFile) avaBtn.onclick = function () {
+  function uploadAva() {
     var f = avaFile.files && avaFile.files[0]
     var avaMsg = document.getElementById('avaMsg')
     if (!f) { msg(avaMsg, 'Сначала выбери файл'); return }
@@ -487,6 +473,21 @@ const PROFILE_SCRIPT = `
     }
     rd.onerror = function () { msg(avaMsg, 'Не удалось прочитать файл') }
     rd.readAsDataURL(f)
+  }
+  if (avaFile) avaFile.onchange = uploadAva
+  if (avaDrop) {
+    avaDrop.addEventListener('dragover', function (e) { e.preventDefault(); avaDrop.classList.add('drag') })
+    avaDrop.addEventListener('dragleave', function () { avaDrop.classList.remove('drag') })
+    avaDrop.addEventListener('drop', function (e) {
+      e.preventDefault()
+      avaDrop.classList.remove('drag')
+      var fs = e.dataTransfer && e.dataTransfer.files
+      if (!fs || !fs.length) return
+      var made = new DataTransfer()
+      for (var i = 0; i < fs.length; i++) made.items.add(fs[i])
+      avaFile.files = made.files
+      uploadAva()
+    })
   }
   if (avaClear) avaClear.onclick = function () {
     if (!confirm('Убрать свою аватарку?')) return
@@ -528,8 +529,12 @@ export const profilePage = ({ user }) => {
     </div>
     <div class="panel">
       <div class="ph"><span class="pic">${ICON('ic-image')}</span><div><h2>Аватарка</h2><p>PNG, JPEG или WEBP до 1.8 МБ. Уберёшь — вернётся обычная аватарка.</p></div></div>
-      <input type="file" id="avaFile" accept="image/png,image/jpeg,image/webp" />
-      <button class="btn btn-block" id="avaBtn">${ICON('ic-image')}Загрузить аватарку</button>
+      <input type="file" id="avaFile" accept="image/png,image/jpeg,image/webp" hidden />
+      <label class="dropzone" id="avaDrop" for="avaFile">
+        <span class="dz-ic">${ICON('ic-image')}</span>
+        <span class="dz-title">Нажми, чтобы выбрать</span>
+        <span class="dz-sub">или перетащи картинку сюда — PNG, JPEG или WEBP</span>
+      </label>
       <button class="btn btn-block ghost" id="avaClear">Убрать аватарку</button>
       <div class="msg" id="avaMsg"></div>
     </div>
@@ -552,8 +557,6 @@ export const profilePage = ({ user }) => {
 </div>` + FOOT + `<script>${PROFILE_SCRIPT}</script>`
 }
 
-/// Кастомная страница подтверждения входа в лаунчер — не дефолтное
-/// «уведомление», а отдельный дизайн. kind = 'ok' | 'frozen'.
 export const confirmPage = ({ kind, title, text, user }) => HEAD(title) + NAV({ logged: '' }) + `
 <style>
 .cp-wrap{min-height:100vh;display:grid;place-items:center;padding:32px 16px}
@@ -589,8 +592,6 @@ export const confirmPage = ({ kind, title, text, user }) => HEAD(title) + NAV({ 
     <div class="sub cp-foot">Страницу можно закрыть — лаунчер сам увидит результат.</div>
   </div>
 </div>` + FOOT
-
-// ============ Админ-панель (по прямому адресу /admin) ============
 
 export const adminPage = ({ authed, passwordSet, loginError }) => {
   if (!authed) {
@@ -1030,7 +1031,6 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
     if (chip) {
       var uid = chip.getAttribute('data-uid')
       var wasOn = chip.classList.contains('on')
-      // Один бейдж на игрока: клик выбирает его, повторный клик снимает.
       chip.closest('tr').querySelectorAll('.role-chip').forEach(function (c) { c.classList.remove('on') })
       if (!wasOn) chip.classList.add('on')
       chip.disabled = true
@@ -1143,8 +1143,6 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
 </script>` + FOOT
 }
 
-// ============ Скрипт главной страницы ============
-
 export const SITE_SCRIPT = `(function () {
   var nickBtn = document.getElementById('nickBtn')
   var nickMsg = document.getElementById('nickMsg')
@@ -1183,7 +1181,6 @@ export const SITE_SCRIPT = `(function () {
       .catch(function () { msg(linkMsg, 'Сеть недоступна — попробуй ещё раз') })
       .then(function () { linkBtn.disabled = false })
   }
-  // Появление блоков при скролле
   var rv = document.querySelectorAll('.rv')
   if ('IntersectionObserver' in window && rv.length) {
     var io = new IntersectionObserver(function (entries) {
