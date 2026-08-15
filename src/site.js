@@ -149,11 +149,11 @@ footer{border-top:1px solid var(--line);background:rgba(8,11,17,.6);padding:52px
 .prof-ava .ic{width:44px;height:44px}
 .prof-ava-wrap::before{content:'';position:absolute;inset:0;border-radius:34px;background:conic-gradient(from 180deg,#3EA6FF,rgba(255,255,255,.25) 30%,#8B5CF6 60%,#3EA6FF);filter:blur(7px);opacity:.7}
 .prof-ava-wrap::after{content:'';position:absolute;inset:6px;border-radius:26px;background:var(--bg)}
-.prof-who{min-width:0;padding-bottom:6px}
+.prof-who{min-width:0;padding-bottom:8px}
 .prof-nick{font-family:'Unbounded';font-weight:800;font-size:26px;line-height:1.1;letter-spacing:-.01em;background:linear-gradient(100deg,#F2F6FB,#9DC7FF);-webkit-background-clip:text;background-clip:text;color:transparent;word-break:break-word}
 .prof-disc{display:flex;align-items:center;gap:8px;color:var(--mut);font-size:13.5px;margin-top:9px}
 .prof-disc .ic{width:16px;height:16px;color:#5865F2;flex:none}
-.prof-roles{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}
+.prof-roles{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto;padding-bottom:8px;justify-content:flex-end;max-width:55%}
 .p-badge{font-family:'Unbounded';font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:6px 11px;border-radius:8px;line-height:1}
 .p-badge.owner{background:linear-gradient(135deg,#FFB84D,#FF8A3D);color:#1A1206}
 .p-badge.admin{background:linear-gradient(135deg,#FF6B6B,#F43F5E);color:#1A0608}
@@ -516,8 +516,8 @@ export const profilePage = ({ user }) => {
       <div class="prof-who">
         <div class="prof-nick" id="profNick">${esc(user.nickname)}</div>
         <div class="prof-disc">${ICON('ic-discord')}<span>${esc(user.discordName || '')} · Discord</span></div>
-        ${roles ? `<div class="prof-roles">${roles}</div>` : ''}
       </div>
+      ${roles ? `<div class="prof-roles">${roles}</div>` : ''}
     </div>
   </div>
   <div class="grid2" style="margin-top:24px">

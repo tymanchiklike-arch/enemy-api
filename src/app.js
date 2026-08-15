@@ -207,12 +207,13 @@ const avatarMime = (b64) => {
   return 'image/png'
 }
 
-// Своя аватарка с сайта важнее всего; дальше — голова лицензии для ника,
-// и только потом Discord-аватар. Готовый URL кэшируем по пользователю, чтобы
-// профиль в лаунчере не ждал Mojang при каждом открытии.
 const AVATAR_URL_CACHE = new Map()
-const avatarForUser = async (user) => {
-  if (user.custom_avatar) return 'data:' + avatarMime(user.custom_avatar) + ';base64,' + user.custom_avatar
+const avatarVersion = (b64) => createHash('sha1').update(b64).digest('hex').slice(0, 10)
+const avatarPath = (user) =>
+  user.custom_avatar ? '/u/' + user.id + '/avatar?v=' + avatarVersion(user.custom_avatar) : null
+const avatarForUser = async (user, base = '') => {
+  const p = avatarPath(user)
+  if (p) return base + p
   const key = user.id
   if (AVATAR_URL_CACHE.has(key)) return AVATAR_URL_CACHE.get(key)
   const uuid = await mcUuidForName(user.nickname)
@@ -220,13 +221,28 @@ const avatarForUser = async (user) => {
   AVATAR_URL_CACHE.set(key, url)
   return url
 }
+const avatarUrlOf = (user) => avatarPath(user) || user.discord_avatar || null
+const avatarWithBase = (base, user) => {
+  const p = avatarUrlOf(user)
+  return p && p.startsWith('/') ? base + p : p
+}
+const absAvatar = (req, user) => avatarWithBase(hostBase(req), user)
 
-// Для списков (друзья, поиск, заявки) Mojang-головы не тянем ради скорости:
-// своя аватарка, иначе Discord.
-const avatarUrlOf = (user) =>
-  (user.custom_avatar ? 'data:' + avatarMime(user.custom_avatar) + ';base64,' + user.custom_avatar : null) ||
-  user.discord_avatar ||
-  null
+app.get('/u/:uid/avatar', ah(async (req, res) => {
+  const uid = Number(req.params.uid)
+  if (!Number.isInteger(uid) || uid < 1) return res.status(404).end()
+  const { rows } = await query('SELECT custom_avatar, discord_avatar FROM users WHERE id = $1', [uid])
+  const u = rows[0]
+  if (!u) return res.status(404).end()
+  if (u.custom_avatar) {
+    return res
+      .set('Content-Type', avatarMime(u.custom_avatar))
+      .set('Cache-Control', 'public, max-age=86400')
+      .send(Buffer.from(u.custom_avatar, 'base64'))
+  }
+  if (u.discord_avatar) return res.redirect(302, u.discord_avatar)
+  res.status(404).end()
+}))
 
 // ============ Вход (device-code) ============
 
@@ -317,7 +333,7 @@ app.get('/', ah(async (req, res) => {
   }
   res
     .set('Content-Type', 'text/html; charset=utf-8')
-    .send(sitePage({ user: user ? { nickname: user.nickname, discordName: user.discord_username, avatarUrl: await avatarForUser(user) } : null }))
+    .send(sitePage({ user: user ? { nickname: user.nickname, discordName: user.discord_username, avatarUrl: await avatarForUser(user, hostBase(req)) } : null }))
 }))
 
 // ============ Профиль на сайте ============
@@ -339,7 +355,7 @@ app.get('/profile', ah(async (req, res) => {
       user: {
         nickname: user.nickname,
         discordName: user.discord_username,
-        avatarUrl: await avatarForUser(user),
+        avatarUrl: await avatarForUser(user, hostBase(req)),
         banner: user.banner || '',
         roles: rolesOf(user),
       },
@@ -435,7 +451,7 @@ app.get('/v2/admin/users', ah(async (req, res) => {
       created_at: r.created_at,
       banned: !!r.banned,
       ban_reason: r.ban_reason || null,
-      avatarUrl: avatarUrlOf(r),
+      avatarUrl: absAvatar(req, r),
     })),
   })
 }))
@@ -481,7 +497,7 @@ app.get('/v2/admin/account-bans', ah(async (req, res) => {
       discordName: r.discord_username,
       reason: r.ban_reason || null,
       at: r.ban_at,
-      avatarUrl: avatarUrlOf(r),
+      avatarUrl: absAvatar(req, r),
     })),
   })
 }))
@@ -558,7 +574,7 @@ app.get('/v2/admin/login-requests', ah(async (req, res) => {
   const now = Math.floor(Date.now() / 1000)
   const { rows } = await query(
     `SELECT d.device_code, d.user_code, d.user_id, d.created_at, d.expires_at, d.status,
-            u.nickname, u.discord_username, u.discord_avatar, u.banned
+            u.nickname, u.discord_username, u.discord_avatar, u.custom_avatar, u.banned
      FROM device_codes d LEFT JOIN users u ON u.id = d.user_id
      WHERE d.expires_at > $1
      ORDER BY d.created_at DESC LIMIT 100`,
@@ -571,7 +587,7 @@ app.get('/v2/admin/login-requests', ah(async (req, res) => {
       userId: r.user_id ? String(r.user_id) : null,
       nickname: r.nickname || null,
       discordName: r.discord_username || null,
-      avatarUrl: r.discord_avatar || null,
+      avatarUrl: absAvatar(req, r),
       status: r.status,
       banned: !!r.banned,
       createdAt: r.created_at,
@@ -676,7 +692,7 @@ app.get('/v2/auth/launcher/approve', ah(async (req, res) => {
   }
   const safeNick = user.nickname.replace(/[<>&"]/g, '')
   const acc = {
-    user: { nickname: user.nickname, discordName: user.discord_username, avatarUrl: await avatarForUser(user) },
+    user: { nickname: user.nickname, discordName: user.discord_username, avatarUrl: await avatarForUser(user, hostBase(req)) },
   }
   if (user.banned) {
     // Замороженный аккаунт: код уходит администратору, который и решит.
@@ -717,7 +733,7 @@ app.post('/v2/auth/launcher/accept', express.urlencoded({ extended: false }), ah
   }
   const safeNick = user.nickname.replace(/[<>&"]/g, '')
   const acc = {
-    user: { nickname: user.nickname, discordName: user.discord_username, avatarUrl: await avatarForUser(user) },
+    user: { nickname: user.nickname, discordName: user.discord_username, avatarUrl: await avatarForUser(user, hostBase(req)) },
   }
   if (user.banned) {
     await claimDeviceUser(row.device_code, user.id)
@@ -852,7 +868,7 @@ app.get('/v2/users/me', requireAuth, ah(async (req, res) => {
   res.json({
     nickname: user.nickname,
     discordName: user.discord_username || null,
-    avatarUrl: await avatarForUser(user),
+    avatarUrl: await avatarForUser(user, hostBase(req)),
     roles: rolesOf(user),
     banner: user.banner || '',
   })
@@ -927,7 +943,7 @@ app.patch('/v2/users/me', requireAuth, ah(async (req, res) => {
     }
   }
   const { rows } = await query('SELECT * FROM users WHERE id = $1', [req.userId])
-  res.json({ nickname: rows[0].nickname, avatarUrl: await avatarForUser(rows[0]), banner: rows[0].banner || '' })
+  res.json({ nickname: rows[0].nickname, avatarUrl: await avatarForUser(rows[0], hostBase(req)), banner: rows[0].banner || '' })
 }))
 
 app.post('/v2/launcher/heartbeat', requireAuth, (req, res) => res.json({}))
@@ -963,7 +979,7 @@ app.get('/v2/core/blocks', requireAuth, ah(async (req, res) => {
   res.json({
     items: rows.map((r) => ({
       blockedId: String(r.blocked_id),
-      user: { id: String(r.blocked_id), nickname: r.nickname, avatarUrl: avatarUrlOf(r) },
+      user: { id: String(r.blocked_id), nickname: r.nickname, avatarUrl: absAvatar(req, r) },
     })),
   })
 }))
@@ -1082,10 +1098,10 @@ app.post('/v2/launcher/rewards/:code/claim', requireAuth, (req, res) =>
 
 const PRESENCE_ONLINE_MS = 45000
 
-const friendRow = (user) => ({
+const friendRow = (user, base = '') => ({
   userId: String(user.id),
   nickname: user.nickname,
-  avatarUrl: avatarUrlOf(user),
+  avatarUrl: avatarWithBase(base, user),
   banner: user.banner || '',
 })
 
@@ -1106,12 +1122,12 @@ const rowToMsg = (row) => {
 
 /// Присутствие в формате Friend для списка/полла: онлайн по свежести seen_at,
 /// статус «в игре» — по полю status, unread — непрочитанные сообщения от него.
-const presenceRow = async (me, user) => {
+const presenceRow = async (me, user, base = '') => {
   const p = await presenceOf(user.id)
   const online = !!p && Date.now() - p.seen_at < PRESENCE_ONLINE_MS
   const playing = !!p && p.status === 'playing'
   return {
-    ...friendRow(user),
+    ...friendRow(user, base),
     roles: rolesOf(user),
     online,
     playing,
@@ -1145,7 +1161,7 @@ app.get('/v2/friends', requireAuth, ah(async (req, res) => {
   const friends = []
   for (const id of ids) {
     const { rows } = await query('SELECT * FROM users WHERE id = $1', [id])
-    if (rows[0]) friends.push(await presenceRow(req.userId, rows[0]))
+    if (rows[0]) friends.push(await presenceRow(req.userId, rows[0], hostBase(req)))
   }
   res.json({ friends })
 }))
@@ -1163,7 +1179,7 @@ app.get('/v2/friends/requests', requireAuth, ah(async (req, res) => {
      WHERE fr.from_id = $1 AND fr.status = 'pending' ORDER BY fr.created_at DESC`,
     [req.userId],
   )
-  const map = (r) => ({ id: String(r.id), userId: String(r.from_id || r.to_id), nickname: r.nickname, avatarUrl: avatarUrlOf(r) })
+  const map = (r) => ({ id: String(r.id), userId: String(r.from_id || r.to_id), nickname: r.nickname, avatarUrl: absAvatar(req, r) })
   res.json({ incoming: inc.rows.map(map), outgoing: out.rows.map(map) })
 }))
 
@@ -1196,7 +1212,7 @@ app.get('/v2/friends/search', requireAuth, ah(async (req, res) => {
     results.push({
       userId: String(uid),
       nickname: u.nickname,
-      avatarUrl: avatarUrlOf(u),
+      avatarUrl: absAvatar(req, u),
       roles: rolesOf(u),
       isFriend,
       pending,
@@ -1308,7 +1324,7 @@ app.get('/v2/friends/profile/:uid', requireAuth, ah(async (req, res) => {
   res.json({
     nick: u.nickname,
     nickname: u.nickname,
-    avatarUrl: avatarUrlOf(u),
+    avatarUrl: absAvatar(req, u),
     roles: rolesOf(u),
     banner: u.banner || '',
     text: playing ? (p.server || p.build || 'Играет') : online ? 'В лаунчере' : 'Игрок Enemy',
@@ -1387,7 +1403,7 @@ app.get('/v2/friends/poll', requireAuth, ah(async (req, res) => {
   const presence = []
   for (const id of ids) {
     const user = (await query('SELECT * FROM users WHERE id = $1', [id])).rows[0]
-    if (user) presence.push(await presenceRow(req.userId, user))
+    if (user) presence.push(await presenceRow(req.userId, user, hostBase(req)))
   }
   const inc = await query(
     `SELECT fr.id, fr.from_id, u.nickname, u.discord_avatar, u.custom_avatar
@@ -1401,7 +1417,7 @@ app.get('/v2/friends/poll', requireAuth, ah(async (req, res) => {
      WHERE fr.from_id = $1 AND fr.status = 'pending' ORDER BY fr.created_at DESC`,
     [req.userId],
   )
-  const map = (r) => ({ id: String(r.id), userId: String(r.from_id || r.to_id), nickname: r.nickname, avatarUrl: avatarUrlOf(r) })
+  const map = (r) => ({ id: String(r.id), userId: String(r.from_id || r.to_id), nickname: r.nickname, avatarUrl: absAvatar(req, r) })
   const since = Number(req.query.since) || Date.now() - 10 * 60000
   const byId = new Map(presence.map((p) => [Number(p.userId), p]))
   const messages = (await newIncomingMessages(req.userId, ids, since)).map((row) => ({
