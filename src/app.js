@@ -23,6 +23,7 @@ import {
   siteUserByToken,
   dropSiteSession,
   deviceByUserCode,
+  bindDeviceUser,
   claimDeviceUser,
   saveMessage,
   chatPage,
@@ -42,7 +43,7 @@ import {
   setUserRoles,
 } from './db.js'
 import { requireAuth, setSessionReader, signAccess, verifyAccess } from './auth.js'
-import { adminPage, errorPage, sitePage } from './site.js'
+import { adminPage, confirmPage, errorPage, sitePage } from './site.js'
 
 const SRC_DIR = dirname(fileURLToPath(import.meta.url))
 const APP_ROOT = join(SRC_DIR, '..')
@@ -66,7 +67,7 @@ const hostBase = (req) =>
 // The Discord client ID is public; only the secret is a secret.
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || '1536058209532510259'
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || ''
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'endertyma2001'
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'endertyma2002'
 const INTERVAL_S = 3
 const EXPIRE_S = 300
 
@@ -283,6 +284,12 @@ app.get('/', ah(async (req, res) => {
     }
   }
   const user = await siteUserByToken(readCookie(req, SESSION_COOKIE))
+  if (user && user.banned) {
+    clearSessionCookie(res)
+    return res
+      .set('Content-Type', 'text/html; charset=utf-8')
+      .send(errorPage('Аккаунт заморожен', 'Твой аккаунт заморожен администратором. Чтобы разморозить — начни вход в лаунчере: заявка уйдёт администратору, и он решит.'))
+  }
   res
     .set('Content-Type', 'text/html; charset=utf-8')
     .send(sitePage({ user: user ? { nickname: user.nickname, discordName: user.discord_username, avatarUrl: user.discord_avatar } : null }))
@@ -363,7 +370,7 @@ app.get('/admin/logout', (req, res) => {
 app.get('/v2/admin/users', ah(async (req, res) => {
   if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
   const { rows } = await query(
-    'SELECT id, nickname, discord_id, discord_username, email, roles, last_ip, created_at FROM users ORDER BY created_at DESC LIMIT 500',
+    'SELECT id, nickname, discord_id, discord_username, email, roles, last_ip, created_at, banned, ban_reason FROM users ORDER BY created_at DESC LIMIT 500',
   )
   res.json({
     users: rows.map((r) => ({
@@ -375,8 +382,31 @@ app.get('/v2/admin/users', ah(async (req, res) => {
       roles: rolesOf(r),
       last_ip: r.last_ip || null,
       created_at: r.created_at,
+      banned: !!r.banned,
+      ban_reason: r.ban_reason || null,
     })),
   })
+}))
+
+app.post('/v2/admin/ban-account', ah(async (req, res) => {
+  if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
+  const id = Number(req.body && req.body.id)
+  const reason = String((req.body && req.body.reason) || '').trim()
+  if (!id) return res.status(400).json({ message: 'нет id' })
+  await query('UPDATE users SET banned = true, ban_reason = $2, ban_at = $3 WHERE id = $1', [
+    id,
+    reason,
+    Date.now(),
+  ])
+  res.json({ ok: true })
+}))
+
+app.post('/v2/admin/unban-account', ah(async (req, res) => {
+  if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
+  const id = Number(req.body && req.body.id)
+  if (!id) return res.status(400).json({ message: 'нет id' })
+  await query('UPDATE users SET banned = false, ban_reason = $1 WHERE id = $2', ['', id])
+  res.json({ ok: true })
 }))
 
 app.get('/v2/admin/bans', ah(async (req, res) => {
@@ -451,7 +481,7 @@ app.get('/v2/admin/login-requests', ah(async (req, res) => {
   const now = Math.floor(Date.now() / 1000)
   const { rows } = await query(
     `SELECT d.device_code, d.user_code, d.user_id, d.created_at, d.expires_at, d.status,
-            u.nickname, u.discord_username, u.discord_avatar
+            u.nickname, u.discord_username, u.discord_avatar, u.banned
      FROM device_codes d LEFT JOIN users u ON u.id = d.user_id
      WHERE d.expires_at > $1
      ORDER BY d.created_at DESC LIMIT 100`,
@@ -466,6 +496,7 @@ app.get('/v2/admin/login-requests', ah(async (req, res) => {
       discordName: r.discord_username || null,
       avatarUrl: r.discord_avatar || null,
       status: r.status,
+      banned: !!r.banned,
       createdAt: r.created_at,
       expiresAt: r.expires_at,
     })),
@@ -486,6 +517,10 @@ app.post('/v2/admin/login-approve', ah(async (req, res) => {
     Math.floor(Date.now() / 1000),
     code,
   ])
+  // Одобрение входа замороженного аккаунта одновременно размораживает его.
+  if (row.user_id) {
+    await query('UPDATE users SET banned = false, ban_reason = $1 WHERE id = $2', ['', row.user_id])
+  }
   res.json({ ok: true })
 }))
 
@@ -562,11 +597,31 @@ app.get('/v2/auth/launcher/approve', ah(async (req, res) => {
     const back = encodeURIComponent('/v2/auth/launcher/approve?device_code=' + req.query.device_code)
     return res.redirect(SITE_PAGE + '?redirect=' + back)
   }
-  // Привязываем личность к коду, но подтверждает админ в панели.
-  await claimDeviceUser(row.device_code, user.id)
+  const safeNick = user.nickname.replace(/[<>&"]/g, '')
+  const acc = {
+    user: { nickname: user.nickname, discordName: user.discord_username, avatarUrl: user.discord_avatar },
+  }
+  if (user.banned) {
+    // Замороженный аккаунт: код уходит администратору, который и решит.
+    await claimDeviceUser(row.device_code, user.id)
+    return res
+      .set('Content-Type', 'text/html; charset=utf-8')
+      .send(confirmPage({
+        kind: 'frozen',
+        title: 'Аккаунт заморожен',
+        text: 'Аккаунт ' + safeNick + ' заморожен администратором. Заявка на вход отправлена — вернись в лаунчер и дождись подтверждения.',
+        ...acc,
+      }))
+  }
+  await bindDeviceUser(row.device_code, user.id)
   res
     .set('Content-Type', 'text/html; charset=utf-8')
-    .send(errorPage('Заявка отправлена', 'Аккаунт ' + user.nickname.replace(/[<>&"]/g, '') + ' привязан к коду ' + row.user_code + '. Подтверждение придёт от администратора — вернись в лаунчер и подожди.'))
+    .send(confirmPage({
+      kind: 'ok',
+      title: 'Вход выполнен',
+      text: 'Аккаунт ' + safeNick + ' привязан к коду ' + row.user_code + '. Возвращайся в лаунчер — вход завершится сам.',
+      ...acc,
+    }))
 }))
 
 app.post('/v2/auth/launcher/accept', express.urlencoded({ extended: false }), ah(async (req, res) => {
@@ -583,11 +638,31 @@ app.post('/v2/auth/launcher/accept', express.urlencoded({ extended: false }), ah
     const back = encodeURIComponent('/v2/auth/launcher/approve?device_code=' + row.device_code)
     return res.redirect(SITE_PAGE + '?redirect=' + back)
   }
-  await claimDeviceUser(row.device_code, user.id)
-  ru().send(errorPage('Заявка отправлена', 'Аккаунт ' + user.nickname.replace(/[<>&"]/g, '') + ' привязан к коду. Подтверждение придёт от администратора — вернись в лаунчер и подожди.'))
+  const safeNick = user.nickname.replace(/[<>&"]/g, '')
+  const acc = {
+    user: { nickname: user.nickname, discordName: user.discord_username, avatarUrl: user.discord_avatar },
+  }
+  if (user.banned) {
+    await claimDeviceUser(row.device_code, user.id)
+    return ru().send(confirmPage({
+      kind: 'frozen',
+      title: 'Аккаунт заморожен',
+      text: 'Аккаунт ' + safeNick + ' заморожен администратором. Заявка на вход отправлена — вернись в лаунчер и дождись подтверждения.',
+      ...acc,
+    }))
+  }
+  await bindDeviceUser(row.device_code, user.id)
+  ru().send(confirmPage({
+    kind: 'ok',
+    title: 'Вход выполнен',
+    text: 'Аккаунт ' + safeNick + ' привязан к коду. Возвращайся в лаунчер — вход завершится сам.',
+    ...acc,
+  }))
 }))
 
 /// Ввод кода на самом сайте (а не только переход по ссылке из лаунчера).
+/// Замороженные аккаунты сюда не доходят (requireAuth отдаёт им 403) — они
+/// входят только через approve-ссылку с решением администратора.
 app.post('/v2/site/launcher/link', requireAuth, ah(async (req, res) => {
   const raw = String((req.body && req.body.code) || '').trim().replace(/\s+/g, '')
   if (!raw) return res.status(400).json({ message: 'Введи код из лаунчера' })
@@ -596,8 +671,8 @@ app.post('/v2/site/launcher/link', requireAuth, ah(async (req, res) => {
   if (!row || row.expires_at < now) return res.status(404).json({ message: 'Код не найден или истёк — начни вход в лаунчере заново' })
   if (row.status === 'denied') return res.status(400).json({ message: 'Этот вход отклонён' })
   if (row.status === 'accepted') return res.json({ ok: true })
-  await claimDeviceUser(row.device_code, req.userId)
-  res.json({ ok: true, waiting: true })
+  await bindDeviceUser(row.device_code, req.userId)
+  res.json({ ok: true })
 }))
 
 app.post('/v2/auth/launcher/poll', ah(async (req, res) => {

@@ -340,6 +340,44 @@ export const errorPage = (title, text) => HEAD(title) + NAV({ logged: '' }) + `
   </div>
 </div>` + FOOT
 
+/// Кастомная страница подтверждения входа в лаунчер — не дефолтное
+/// «уведомление», а отдельный дизайн. kind = 'ok' | 'frozen'.
+export const confirmPage = ({ kind, title, text, user }) => HEAD(title) + NAV({ logged: '' }) + `
+<style>
+.cp-wrap{min-height:100vh;display:grid;place-items:center;padding:32px 16px}
+.cp{width:100%;max-width:430px;text-align:center;padding:38px 28px}
+.cp-ring{width:86px;height:86px;margin:0 auto 24px;border-radius:50%;display:grid;place-items:center;font-size:36px}
+.cp-ok .cp-ring{color:#7dff6b;background:radial-gradient(circle at 50% 35%,rgba(125,255,107,.18),rgba(125,255,107,0) 72%);border:1px solid rgba(125,255,107,.4);box-shadow:0 0 40px rgba(125,255,107,.2)}
+.cp-frozen .cp-ring{color:#ffd83d;background:radial-gradient(circle at 50% 35%,rgba(255,216,61,.18),rgba(255,216,61,0) 72%);border:1px solid rgba(255,216,61,.4);box-shadow:0 0 40px rgba(255,216,61,.2)}
+.cp h2{margin:0 0 10px}
+.cp .sub{margin:0 0 24px;line-height:1.55}
+.cp-acc{display:flex;gap:12px;align-items:center;justify-content:center;padding:12px 14px;background:rgba(8,12,18,.7);border:1px solid var(--line);border-radius:14px;margin-bottom:24px;text-align:left}
+.cp-foot{margin-top:6px}
+</style>
+<div class="wrap cp-wrap">
+  <div class="panel cp cp-${kind}">
+    <div class="cp-ring">${ICON(kind === 'ok' ? 'ic-check' : 'ic-lock')}</div>
+    <h2>${esc(title)}</h2>
+    <p class="sub">${esc(text)}</p>
+    ${
+      user
+        ? `<div class="cp-acc">${
+            user.avatarUrl
+              ? `<img class="ava" src="${esc(user.avatarUrl)}" alt="" />`
+              : `<div class="ava">${esc((user.nickname || 'E').slice(0, 1).toUpperCase())}</div>`
+          }
+            <div>
+              <div class="nm">${esc(user.nickname)}</div>
+              ${user.discordName ? `<div class="dn">${esc(user.discordName)}</div>` : ''}
+            </div>
+          </div>`
+        : ''
+    }
+    <a href="/" style="display:block"><button class="btn ghost" style="width:100%">На сайт</button></a>
+    <div class="sub cp-foot">Страницу можно закрыть — лаунчер сам увидит результат.</div>
+  </div>
+</div>` + FOOT
+
 // ============ Админ-панель (по прямому адресу /admin) ============
 
 export const adminPage = ({ authed, passwordSet, loginError }) => {
@@ -444,13 +482,17 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
         return '<button class="role-chip' + (on ? ' on' : '') + '" data-uid="' + u.id + '" data-role="' + r + '">' + r.charAt(0).toUpperCase() + r.slice(1) + '</button>'
       }).join('')
       tr.innerHTML = '<td style="padding:10px 16px;color:var(--faint);white-space:nowrap">' + u.id + '</td>' +
-        '<td style="padding:10px 8px"><input data-uid="' + u.id + '" value="' + esc2(u.nickname) + '" maxlength="20" style="max-width:150px;padding:8px 10px;font-size:13px" /></td>' +
+        '<td style="padding:10px 8px"><input data-uid="' + u.id + '" value="' + esc2(u.nickname) + '" maxlength="20" style="max-width:150px;padding:8px 10px;font-size:13px" />' +
+        (u.banned ? ' <span style="color:#ff5f57;font-weight:800;font-size:11px">ЗАМОРОЖЕН</span>' : '') + '</td>' +
         '<td style="padding:10px 8px;color:var(--mut)">' + esc2(u.discord_username || (u.discord_id ? '#' + u.discord_id : '—')) + '</td>' +
         '<td style="padding:10px 8px;white-space:nowrap;min-width:180px">' + chips + '</td>' +
         '<td style="padding:10px 8px;white-space:nowrap">' + (u.last_ip ? esc2(u.last_ip) : '<span style="color:var(--faint)">—</span>') + '</td>' +
         '<td style="padding:10px 8px;color:var(--faint);white-space:nowrap">' + human(u.created_at) + '</td>' +
         '<td style="padding:10px 16px;text-align:right;white-space:nowrap">' +
           (u.last_ip ? '<button class="btn sm" data-a="ban" data-uid="' + u.id + '" style="margin-right:8px">Бан</button>' : '') +
+          (u.banned
+            ? '<button class="btn sm" data-a="unfreeze" data-uid="' + u.id + '" style="margin-right:8px">Разморозить</button>'
+            : '<button class="btn sm" data-a="freeze" data-uid="' + u.id + '" style="margin-right:8px">Заморозить</button>') +
           '<button class="btn sm" data-a="set" data-uid="' + u.id + '" style="margin-right:8px">Сохранить</button>' +
           '<button class="btn sm danger" data-a="del" data-uid="' + u.id + '">Удалить</button></td>'
       rows.appendChild(tr)
@@ -519,13 +561,14 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
       var who2 = r.nickname && r.discordName ? ' <span style="color:var(--faint)">· ' + esc2(r.discordName) + '</span>' : ''
       var ava = r.avatarUrl ? '<img src="' + esc2(r.avatarUrl) + '" style="width:26px;height:26px;border-radius:50%;flex:none" />' : '<span style="width:26px;height:26px;border-radius:50%;background:var(--line);flex:none"></span>'
       var st = r.status === 'accepted' ? ' <b style="color:#7dff6b">одобрен</b>' : r.status === 'denied' ? ' <b style="color:#ff5f57">отклонён</b>' : ' <b style="color:#ffd83d">ждёт</b>'
+      var frozen = r.banned ? ' <b style="color:#ff5f57">аккаунт заморожен</b>' : ''
       var acts = r.status === 'pending'
         ? '<button class="btn sm" data-approve="' + esc2(r.deviceCode) + '" style="margin-right:8px">Одобрить</button><button class="btn sm danger" data-deny="' + esc2(r.deviceCode) + '">Отклонить</button>'
         : ''
       return '<div style="display:flex;gap:12px;align-items:center;padding:9px 0;border-top:1px solid var(--line)">' + ava +
         '<div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700">' + who + who2 + '</div>' +
         '<div style="color:var(--faint);font-size:12px">Код ' + esc2(r.userCode || '') + ' · ' + human2(r.createdAt) + '</div></div>' +
-        '<span style="white-space:nowrap">' + st + '</span>' + acts + '</div>'
+        '<span style="white-space:nowrap">' + frozen + ' ' + st + '</span>' + acts + '</div>'
     }).join('')
   }
   function loadReqs() {
@@ -576,10 +619,13 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
   var admNickEl = document.getElementById('admNick')
   if (admNickEl) admNickEl.addEventListener('keydown', function (e) { if (e.key === 'Enter' && admAdd) admAdd.onclick() })
   loadAdmins()
-  fetch('/v2/admin/users').then(function (r) {
-    if (r.status === 401) { msg('Сессия истекла — перезайди под паролем.'); location.href = '/admin'; return }
-    return r.json().then(function (d) { render(d.users || []) })
-  }).catch(function () { msg('Ошибка сети') })
+  function loadUsers() {
+    fetch('/v2/admin/users').then(function (r) {
+      if (r.status === 401) { msg('Сессия истекла — перезайди под паролем.'); location.href = '/admin'; return }
+      return r.json().then(function (d) { render(d.users || []) })
+    }).catch(function () { msg('Ошибка сети') })
+  }
+  loadUsers()
   function rowRoles(uid) {
     var tr = rows.querySelector('button.role-chip[data-uid="' + uid + '"]').closest('tr')
     var out = []
@@ -668,6 +714,38 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
       prefillBan(ipTd ? ipTd.textContent.trim() : '')
       return
     }
+    if (act === 'freeze') {
+      if (!confirm('Заморозить аккаунт #' + uid + '?')) return
+      b.disabled = true
+      fetch('/v2/admin/ban-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: uid })
+      }).then(function (r) {
+        return r.json().then(function (d) {
+          if (!r.ok) { msg(d.message || 'Не получилось'); return }
+          msg('Аккаунт #' + uid + ' заморожен')
+          loadUsers()
+        })
+      }).catch(function () { msg('Ошибка сети') }).then(function () { b.disabled = false })
+      return
+    }
+    if (act === 'unfreeze') {
+      if (!confirm('Разморозить аккаунт #' + uid + '?')) return
+      b.disabled = true
+      fetch('/v2/admin/unban-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: uid })
+      }).then(function (r) {
+        return r.json().then(function (d) {
+          if (!r.ok) { msg(d.message || 'Не получилось'); return }
+          msg('Аккаунт #' + uid + ' разморожен')
+          loadUsers()
+        })
+      }).catch(function () { msg('Ошибка сети') }).then(function () { b.disabled = false })
+      return
+    }
     if (act === 'del' && !confirm('Удалить пользователя #' + uid + '?')) return
     var body = act === 'del' ? { id: uid } : { id: uid, nickname: rows.querySelector('input[data-uid="' + uid + '"]').value }
     b.disabled = true
@@ -722,7 +800,6 @@ export const SITE_SCRIPT = `(function () {
     fetch('/v2/site/launcher/link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: code }) })
       .then(function (r) { return r.json().catch(function () { return {} }).then(function (d) {
         if (!r.ok) return msg(linkMsg, d.message || 'Код не подошёл')
-        if (d.waiting) return msg(linkMsg, 'Заявка отправлена — жди подтверждения администратора.', true)
         msg(linkMsg, 'Готово! Возвращайся в лаунчер — вход выполнен.', true)
       }) })
       .catch(function () { msg(linkMsg, 'Сеть недоступна — попробуй ещё раз') })
