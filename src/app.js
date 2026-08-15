@@ -288,7 +288,7 @@ app.get('/', ah(async (req, res) => {
     clearSessionCookie(res)
     return res
       .set('Content-Type', 'text/html; charset=utf-8')
-      .send(errorPage('Аккаунт заморожен', 'Твой аккаунт заморожен администратором. Чтобы разморозить — начни вход в лаунчере: заявка уйдёт администратору, и он решит.'))
+      .send(errorPage('Аккаунт забанен', 'Твой аккаунт забанен администратором. Чтобы снять бан — начни вход в лаунчере: заявка уйдёт администратору, и он решит.'))
   }
   res
     .set('Content-Type', 'text/html; charset=utf-8')
@@ -390,11 +390,18 @@ app.get('/v2/admin/users', ah(async (req, res) => {
 
 app.post('/v2/admin/ban-account', ah(async (req, res) => {
   if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
-  const id = Number(req.body && req.body.id)
+  const id = Number(req.body && req.body.id) || 0
+  const nick = String((req.body && req.body.nickname) || '').trim()
   const reason = String((req.body && req.body.reason) || '').trim()
-  if (!id) return res.status(400).json({ message: 'нет id' })
+  let rows
+  if (id) {
+    rows = (await query('SELECT id FROM users WHERE id = $1', [id])).rows
+  } else if (nick) {
+    rows = (await query('SELECT id FROM users WHERE LOWER(nickname) = LOWER($1) LIMIT 1', [nick])).rows
+  }
+  if (!rows || !rows.length) return res.status(404).json({ message: 'Пользователь не найден' })
   await query('UPDATE users SET banned = true, ban_reason = $2, ban_at = $3 WHERE id = $1', [
-    id,
+    rows[0].id,
     reason,
     Date.now(),
   ])
@@ -407,6 +414,23 @@ app.post('/v2/admin/unban-account', ah(async (req, res) => {
   if (!id) return res.status(400).json({ message: 'нет id' })
   await query('UPDATE users SET banned = false, ban_reason = $1 WHERE id = $2', ['', id])
   res.json({ ok: true })
+}))
+
+app.get('/v2/admin/account-bans', ah(async (req, res) => {
+  if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
+  const { rows } = await query(
+    'SELECT id, nickname, discord_id, discord_username, ban_reason, ban_at FROM users WHERE banned = true ORDER BY ban_at DESC LIMIT 500',
+  )
+  res.json({
+    bans: rows.map((r) => ({
+      id: String(r.id),
+      nickname: r.nickname,
+      discordId: r.discord_id,
+      discordName: r.discord_username,
+      reason: r.ban_reason || null,
+      at: r.ban_at,
+    })),
+  })
 }))
 
 app.get('/v2/admin/bans', ah(async (req, res) => {
@@ -517,7 +541,7 @@ app.post('/v2/admin/login-approve', ah(async (req, res) => {
     Math.floor(Date.now() / 1000),
     code,
   ])
-  // Одобрение входа замороженного аккаунта одновременно размораживает его.
+  // Одобрение входа забаненного аккаунта одновременно снимает бан.
   if (row.user_id) {
     await query('UPDATE users SET banned = false, ban_reason = $1 WHERE id = $2', ['', row.user_id])
   }
@@ -608,8 +632,8 @@ app.get('/v2/auth/launcher/approve', ah(async (req, res) => {
       .set('Content-Type', 'text/html; charset=utf-8')
       .send(confirmPage({
         kind: 'frozen',
-        title: 'Аккаунт заморожен',
-        text: 'Аккаунт ' + safeNick + ' заморожен администратором. Заявка на вход отправлена — вернись в лаунчер и дождись подтверждения.',
+        title: 'Аккаунт забанен',
+        text: 'Аккаунт ' + safeNick + ' забанен администратором. Заявка на вход отправлена — вернись в лаунчер и дождись подтверждения.',
         ...acc,
       }))
   }
@@ -646,8 +670,8 @@ app.post('/v2/auth/launcher/accept', express.urlencoded({ extended: false }), ah
     await claimDeviceUser(row.device_code, user.id)
     return ru().send(confirmPage({
       kind: 'frozen',
-      title: 'Аккаунт заморожен',
-      text: 'Аккаунт ' + safeNick + ' заморожен администратором. Заявка на вход отправлена — вернись в лаунчер и дождись подтверждения.',
+      title: 'Аккаунт забанен',
+      text: 'Аккаунт ' + safeNick + ' забанен администратором. Заявка на вход отправлена — вернись в лаунчер и дождись подтверждения.',
       ...acc,
     }))
   }

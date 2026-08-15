@@ -48,7 +48,7 @@ export const requireAuth = async (req, res, next) => {
   try {
     const { rows } = await query('SELECT banned FROM users WHERE id = $1', [req.userId])
     if (rows[0] && rows[0].banned) {
-      res.status(403).json({ message: 'Аккаунт заморожен', banned: true })
+      res.status(403).json({ message: 'Аккаунт забанен', banned: true })
       return
     }
   } catch {}

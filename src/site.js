@@ -439,7 +439,7 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
       <p class="secd">Код привязывается к аккаунту — подтверди или отклони вход. Обновляется автоматически.</p>
       <div class="adm-chips" id="reqCats">
         <button class="adm-chip on" data-cat="pending">Ожидают</button>
-        <button class="adm-chip" data-cat="frozen">Замороженные</button>
+        <button class="adm-chip" data-cat="frozen">Забаненные</button>
         <button class="adm-chip" data-cat="accepted">Одобренные</button>
         <button class="adm-chip" data-cat="denied">Отклонённые</button>
       </div>
@@ -449,7 +449,17 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
 
   <section class="adm-pane" id="pane-bans">
     <div class="adm-card">
-      <div class="adm-h"><h3>Баны по IP</h3></div>
+      <div class="adm-h"><h3>Бан аккаунта</h3></div>
+      <p class="secd">Блокирует сам аккаунт: вход в лаунчер и на сайт закрыт, у игрока идёт заявка администратору.</p>
+      <div class="adm-row">
+        <input id="abanNick" placeholder="Ник игрока (Enemy)" />
+        <input id="abanReason" placeholder="Причина (необязательно)" />
+        <button class="btn" id="abanAdd">${ICON('ic-user')}Забанить</button>
+      </div>
+      <div id="abanList" class="adm-list"></div>
+    </div>
+    <div class="adm-card" style="margin-top:18px">
+      <div class="adm-h"><h3>Бан по IP</h3></div>
       <p class="secd">Заблокированный IP не пройдёт ни в лаунчер, ни на сайт.</p>
       <div class="adm-row">
         <input id="banIp" placeholder="IP, например 1.2.3.4" />
@@ -475,7 +485,8 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
 <style>
 .adm-top{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin:56px 0 22px;flex-wrap:wrap}
 .adm-top-r{display:flex;align-items:center;gap:16px}
-.adm-nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:26px}
+nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filter:none;-webkit-backdrop-filter:none}
+.adm-nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:26px;position:static;top:auto;z-index:auto;background:none;border-bottom:0;backdrop-filter:none;-webkit-backdrop-filter:none}
 .adm-tab{display:inline-flex;align-items:center;gap:9px;border:1px solid var(--line);background:rgba(148,163,200,.06);color:var(--mut);border-radius:12px;padding:10px 16px;font-family:'Manrope';font-weight:700;font-size:13.5px;cursor:pointer;transition:all .18s}
 .adm-tab .ic{width:16px;height:16px;color:var(--faint);transition:color .18s}
 .adm-tab:hover{color:var(--txt);background:rgba(148,163,200,.12)}
@@ -487,7 +498,7 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
 .adm-pane{display:none}
 .adm-pane.on{display:block;animation:fadeIn .25s ease}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-.adm-card{background:linear-gradient(180deg,rgba(22,30,48,.7),rgba(17,25,39,.7));border:1px solid var(--line);border-radius:18px;padding:22px;overflow:hidden}
+.adm-card{background:linear-gradient(180deg,rgba(22,30,48,.7),rgba(17,25,39,.7));border:1px solid var(--line);border-radius:18px;padding:22px}
 .adm-h{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px}
 .adm-h h3{margin:0;font-family:'Unbounded';font-weight:700;font-size:16px;letter-spacing:.01em}
 .adm-h input{max-width:260px;padding:10px 13px;font-size:13.5px}
@@ -499,12 +510,12 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
 .adm-chip{border:1px solid var(--line);background:rgba(148,163,200,.06);color:var(--faint);border-radius:99px;padding:7px 14px;font-family:'Manrope';font-weight:700;font-size:12.5px;cursor:pointer;transition:all .18s}
 .adm-chip:hover{color:var(--txt)}
 .adm-chip.on{color:#fff;background:rgba(62,166,255,.2);border-color:rgba(62,166,255,.5)}
-.adm-scroll{overflow-x:auto}
-.admin-table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:720px}
+.admin-table{width:100%;border-collapse:collapse;font-size:13.5px}
 .admin-table thead th{text-align:left;color:var(--faint);font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:14px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 .admin-table thead th:first-child{padding-left:4px}
 .admin-table thead th.r{text-align:right}
 .admin-table th,.admin-table td{vertical-align:middle}
+.admin-table .btn.sm{padding:8px 11px;font-size:12.5px;border-radius:8px}
 .adm-st{margin-top:12px;color:var(--mut);font-size:13px;min-height:18px}
 .req-st{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:800;padding:4px 9px;border-radius:99px;white-space:nowrap}
 .req-st::before{content:'';width:6px;height:6px;border-radius:50%}
@@ -579,16 +590,16 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
       }).join('')
       tr.innerHTML = '<td style="padding:10px 16px;color:var(--faint);white-space:nowrap">' + u.id + '</td>' +
         '<td style="padding:10px 8px"><input data-uid="' + u.id + '" value="' + esc2(u.nickname) + '" maxlength="20" style="max-width:150px;padding:8px 10px;font-size:13px" />' +
-        (u.banned ? ' <span style="color:#ff5f57;font-weight:800;font-size:11px">ЗАМОРОЖЕН</span>' : '') + '</td>' +
+        (u.banned ? ' <span style="color:#ff5f57;font-weight:800;font-size:11px">ЗАБАНЕН</span>' : '') + '</td>' +
         '<td style="padding:10px 8px;color:var(--mut)">' + esc2(u.discord_username || (u.discord_id ? '#' + u.discord_id : '—')) + '</td>' +
         '<td style="padding:10px 8px;white-space:nowrap;min-width:180px">' + chips + '</td>' +
         '<td style="padding:10px 8px;white-space:nowrap">' + (u.last_ip ? esc2(u.last_ip) : '<span style="color:var(--faint)">—</span>') + '</td>' +
         '<td style="padding:10px 8px;color:var(--faint);white-space:nowrap">' + human(u.created_at) + '</td>' +
         '<td style="padding:10px 16px;text-align:right;white-space:nowrap">' +
-          (u.last_ip ? '<button class="btn sm" data-a="ban" data-uid="' + u.id + '" style="margin-right:8px">Бан</button>' : '') +
+          (u.last_ip ? '<button class="btn sm" data-a="ban" data-uid="' + u.id + '" style="margin-right:8px">Бан по IP</button>' : '') +
           (u.banned
-            ? '<button class="btn sm" data-a="unfreeze" data-uid="' + u.id + '" style="margin-right:8px">Разморозить</button>'
-            : '<button class="btn sm" data-a="freeze" data-uid="' + u.id + '" style="margin-right:8px">Заморозить</button>') +
+            ? '<button class="btn sm" data-a="unfreeze" data-uid="' + u.id + '" style="margin-right:8px">Разбан</button>'
+            : '<button class="btn sm" data-a="freeze" data-uid="' + u.id + '" style="margin-right:8px">Бан</button>') +
           '<button class="btn sm" data-a="set" data-uid="' + u.id + '" style="margin-right:8px">Сохранить</button>' +
           '<button class="btn sm danger" data-a="del" data-uid="' + u.id + '">Удалить</button></td>'
       rows.appendChild(tr)
@@ -602,8 +613,9 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
   }
   function renderBans(list) {
     var el = document.getElementById('banList')
-    setCount('ctBans', list.length)
-    if (!list.length) { el.innerHTML = '<p style="color:var(--faint);font-size:13px">Забаненных нет.</p>'; return }
+    banCounts.ip = list.length
+    updateBanCount()
+    if (!list.length) { el.innerHTML = '<p style="color:var(--faint);font-size:13px">Забаненных IP нет.</p>'; return }
     el.innerHTML = list.map(function (b) {
       return '<div style="display:flex;gap:10px;align-items:center;padding:8px 2px;border-top:1px solid var(--line)">' +
         '<b style="min-width:0;word-break:break-all;font-size:13.5px">' + esc2(b.ip) + '</b>' +
@@ -649,6 +661,54 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
   if (banReasonEl) banReasonEl.addEventListener('keydown', banEnter)
   loadBans()
 
+  var banCounts = { ip: 0, acc: 0 }
+  function updateBanCount() { setCount('ctBans', banCounts.ip + banCounts.acc) }
+  function renderAccountBans(list) {
+    var el = document.getElementById('abanList')
+    if (!el) return
+    banCounts.acc = list.length
+    updateBanCount()
+    if (!list.length) { el.innerHTML = '<p style="color:var(--faint);font-size:13px">Забаненных аккаунтов нет.</p>'; return }
+    el.innerHTML = list.map(function (b) {
+      return '<div style="display:flex;gap:10px;align-items:center;padding:8px 2px">' +
+        '<b style="font-size:13.5px">' + esc2(b.nickname) + '</b>' +
+        '<span style="color:var(--faint);font-size:12.5px">#' + esc2(b.id) + '</span>' +
+        '<span style="flex:1;min-width:0;color:var(--mut);font-size:13px">' + (b.reason ? esc2(b.reason) : '<span style="color:var(--faint)">без причины</span>') + '</span>' +
+        '<span style="color:var(--faint);font-size:12px;white-space:nowrap">' + human2(b.at) + '</span>' +
+        '<button class="btn sm" data-abanun="' + esc2(b.id) + '">Разбан</button></div>'
+    }).join('')
+  }
+  function loadAccountBans() {
+    fetch('/v2/admin/account-bans').then(function (r) {
+      if (r.status === 401) return
+      return r.json().then(function (d) { renderAccountBans(d.bans || []) })
+    }).catch(function () {})
+  }
+  var abanAdd = document.getElementById('abanAdd')
+  if (abanAdd) abanAdd.onclick = function () {
+    var nick = document.getElementById('abanNick').value.trim()
+    var reason = document.getElementById('abanReason').value.trim()
+    if (!nick) { msg('Введи ник'); return }
+    abanAdd.disabled = true
+    fetch('/v2/admin/ban-account', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname: nick, reason: reason })
+    }).then(function (r) {
+      return r.json().then(function (d) {
+        if (!r.ok) { msg(d.message || 'Не получилось'); return }
+        msg('Аккаунт забанен: ' + nick)
+        document.getElementById('abanNick').value = ''
+        document.getElementById('abanReason').value = ''
+        loadAccountBans()
+        loadUsers()
+      })
+    }).catch(function () { msg('Ошибка сети') }).then(function () { abanAdd.disabled = false })
+  }
+  var abanNickEl = document.getElementById('abanNick')
+  if (abanNickEl) abanNickEl.addEventListener('keydown', function (e) { if (e.key === 'Enter' && abanAdd) abanAdd.onclick() })
+  loadAccountBans()
+
   function reqInCat(r) {
     if (reqCat === 'frozen') return r.status === 'pending' && !!r.banned
     if (reqCat === 'accepted') return r.status === 'accepted'
@@ -668,7 +728,7 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
       var stCls, stTxt
       if (r.status === 'accepted') { stCls = 'ok'; stTxt = 'одобрен' }
       else if (r.status === 'denied') { stCls = 'no'; stTxt = 'отклонён' }
-      else if (r.banned) { stCls = 'frozen'; stTxt = 'заморожен' }
+      else if (r.banned) { stCls = 'frozen'; stTxt = 'забанен' }
       else { stCls = 'wait'; stTxt = 'ждёт' }
       var acts = r.status === 'pending'
         ? '<button class="btn sm" data-approve="' + esc2(r.deviceCode) + '" style="margin-right:8px">Одобрить</button><button class="btn sm danger" data-deny="' + esc2(r.deviceCode) + '">Отклонить</button>'
@@ -784,6 +844,24 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
       }).catch(function () { msg('Ошибка сети') })
       return
     }
+    var ab = e.target.closest('button[data-abanun]')
+    if (ab) {
+      var abId = ab.getAttribute('data-abanun')
+      if (!confirm('Разбанить аккаунт #' + abId + '?')) return
+      fetch('/v2/admin/unban-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: abId })
+      }).then(function (r) {
+        return r.json().then(function (d) {
+          if (!r.ok) { msg(d.message || 'Не получилось'); return }
+          msg('Аккаунт #' + abId + ' разбанен')
+          loadAccountBans()
+          loadUsers()
+        })
+      }).catch(function () { msg('Ошибка сети') })
+      return
+    }
     var ap = e.target.closest('button[data-approve],button[data-deny]')
     if (ap) {
       var apCode = ap.getAttribute('data-approve') || ap.getAttribute('data-deny')
@@ -829,7 +907,7 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
       return
     }
     if (act === 'freeze') {
-      if (!confirm('Заморозить аккаунт #' + uid + '?')) return
+      if (!confirm('Забанить аккаунт #' + uid + '?')) return
       b.disabled = true
       fetch('/v2/admin/ban-account', {
         method: 'POST',
@@ -838,14 +916,14 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
       }).then(function (r) {
         return r.json().then(function (d) {
           if (!r.ok) { msg(d.message || 'Не получилось'); return }
-          msg('Аккаунт #' + uid + ' заморожен')
+          msg('Аккаунт #' + uid + ' забанен')
           loadUsers()
         })
       }).catch(function () { msg('Ошибка сети') }).then(function () { b.disabled = false })
       return
     }
     if (act === 'unfreeze') {
-      if (!confirm('Разморозить аккаунт #' + uid + '?')) return
+      if (!confirm('Разбанить аккаунт #' + uid + '?')) return
       b.disabled = true
       fetch('/v2/admin/unban-account', {
         method: 'POST',
@@ -854,7 +932,7 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
       }).then(function (r) {
         return r.json().then(function (d) {
           if (!r.ok) { msg(d.message || 'Не получилось'); return }
-          msg('Аккаунт #' + uid + ' разморожен')
+          msg('Аккаунт #' + uid + ' разбанен')
           loadUsers()
         })
       }).catch(function () { msg('Ошибка сети') }).then(function () { b.disabled = false })
