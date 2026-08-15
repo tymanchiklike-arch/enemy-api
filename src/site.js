@@ -156,6 +156,35 @@ footer{border-top:1px solid var(--line);background:rgba(8,11,17,.6);padding:52px
 .foot nav a{display:block;color:var(--mut);font-size:13.5px;margin-bottom:10px;transition:color .2s,transform .2s}
 .foot nav a:hover{color:var(--txt);transform:translateX(3px)}
 .legal{margin-top:44px;color:var(--faint);font-size:12px;line-height:1.7;max-width:900px}
+/* ===== Профиль ===== */
+.panel.profile{padding:0;overflow:hidden}
+.prof-banner{height:150px}
+.prof-body{display:flex;gap:20px;align-items:center;padding:0 30px 28px;margin-top:-46px}
+.prof-ava{width:88px;height:88px;border-radius:24px;object-fit:cover;border:5px solid var(--bg);background:var(--line);flex:none;display:grid;place-items:center;font-family:'Unbounded';font-weight:800;font-size:30px;color:var(--acc)}
+.prof-ava .ic{width:40px;height:40px}
+.prof-nick{font-family:'Unbounded';font-weight:700;font-size:19px;line-height:1.2}
+.prof-disc{color:var(--mut);font-size:13.5px;margin-top:5px}
+.prof-roles{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.p-badge{font-family:'Unbounded';font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:5px 9px;border-radius:7px;line-height:1}
+.p-badge.owner{background:linear-gradient(135deg,#FFB84D,#FF8A3D);color:#1A1206}
+.p-badge.admin{background:linear-gradient(135deg,#FF6B6B,#F43F5E);color:#1A0608}
+.p-badge.moder{background:linear-gradient(135deg,#4BE38B,#22C55E);color:#052012}
+.p-badge.tester{background:linear-gradient(135deg,#8B5CF6,#6D28D9);color:#12041F}
+.lab{display:block;margin:0 0 10px;color:var(--mut);font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.swatches{display:flex;flex-wrap:wrap;gap:10px}
+.sw{width:34px;height:34px;border-radius:10px;border:2px solid rgba(255,255,255,.06);cursor:pointer;transition:transform .15s,border-color .15s}
+.sw:hover{transform:scale(1.1)}
+.sw.on{border-color:#fff}
+.sw.none{background:linear-gradient(135deg,rgba(120,170,255,.3),rgba(120,170,255,.06));position:relative}
+.sw.none::after{content:'×';position:absolute;inset:0;display:grid;place-items:center;color:var(--faint);font-size:15px;font-weight:800}
+.sw-custom{display:flex;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap}
+.sw-custom input[type="color"]{width:44px;height:38px;padding:3px;border-radius:9px;background:var(--panel);flex:none}
+.sw-custom input[type="text"]{width:130px;flex:none}
+.sw-custom .lab{margin:0}
+input[type="file"]{padding:10px;font-size:13px}
+.prof-back{display:inline-flex;align-items:center;gap:8px;color:var(--mut);font-size:13.5px;font-weight:600;margin:34px 0 0;transition:color .2s}
+.prof-back:hover{color:var(--txt)}
+.prof-back .ic{width:16px;height:16px;transform:rotate(180deg)}
 @media (max-width:760px){.hero{padding-top:60px}.wrap{padding-bottom:64px}}
 `
 
@@ -180,6 +209,7 @@ const NAV = ({ logged }) => `
   <a class="brand" href="/"><img class="logo" src="/logo.png" alt="Enemy" />Enemy<span class="beta">beta</span></a>
   <div class="nlinks">
     <a href="/#account">Аккаунт</a>
+    ${logged ? '<a href="/profile">Профиль</a>' : ''}
     <a href="/#launcher">Лаунчер</a>
     <a href="/#features">Возможности</a>
   </div>
@@ -287,6 +317,7 @@ const authed = (user) => {
   <input id="nick" value="${esc(user.nickname)}" maxlength="20" autocomplete="off" placeholder="Ник Enemy" />
   <button class="btn btn-block" id="nickBtn">${ICON('ic-check')}Сохранить ник</button>
   <div class="msg" id="nickMsg">Если ник совпадает с лицензионным аккаунтом Minecraft — на аватаре будет его голова.</div>
+  <div style="margin-top:12px"><a href="/profile" class="subtle">${ICON('ic-arrow')} Открыть полный профиль — баннер и аватарка</a></div>
 </div>`,
     launcher: `
 <div class="panel" id="launcher">
@@ -339,6 +370,177 @@ export const errorPage = (title, text) => HEAD(title) + NAV({ logged: '' }) + `
     <a href="/" style="display:block"><button class="btn ghost" style="width:100%">На сайт</button></a>
   </div>
 </div>` + FOOT
+
+// ============ Профиль на сайте (как в лаунчере) ============
+
+const BANNER_COLORS = [
+  '#5b8cff', '#8b5cf6', '#ec4899', '#f43f5e', '#f59e0b',
+  '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#f8fafc',
+]
+
+const bannerBg = (hex) =>
+  hex
+    ? 'linear-gradient(135deg, ' + hex + 'f2 0%, ' + hex + 'b8 45%, ' + hex + '55 78%, ' + hex + '1f 100%)'
+    : 'linear-gradient(135deg, rgba(120,170,255,.25) 0%, rgba(120,170,255,.06) 100%)'
+
+const PROFILE_SCRIPT = `
+(function () {
+  function msg(el, text, ok) { el.textContent = text; el.className = 'msg' + (ok ? ' ok' : '') }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
+  function bannerBg(hex) {
+    return hex
+      ? 'linear-gradient(135deg, ' + hex + 'f2 0%, ' + hex + 'b8 45%, ' + hex + '55 78%, ' + hex + '1f 100%)'
+      : 'linear-gradient(135deg, rgba(120,170,255,.25) 0%, rgba(120,170,255,.06) 100%)'
+  }
+  function markSwatches(hex) {
+    var sws = document.querySelectorAll('.sw')
+    for (var i = 0; i < sws.length; i++) sws[i].classList.toggle('on', sws[i].getAttribute('data-c') === hex)
+  }
+  function setBanner(hex, msgEl) {
+    if (hex !== '' && !/^#[0-9a-fA-F]{3,8}$/.test(hex)) { msg(msgEl, 'Цвет баннера — hex, например #5b8cff'); return }
+    fetch('/v2/users/me', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ banner: hex }) })
+      .then(function (r) { return r.json().catch(function () { return {} }).then(function (d) {
+        if (!r.ok) { msg(msgEl, d.message || 'Не сохранилось'); return }
+        document.getElementById('profBanner').style.background = bannerBg(hex)
+        markSwatches(hex)
+        var hx = document.getElementById('banHex')
+        if (hx) hx.value = hex
+        msg(msgEl, hex ? 'Цвет баннера сохранён: ' + hex : 'Баннер убран', true)
+      }) })
+      .catch(function () { msg(msgEl, 'Сеть недоступна — попробуй ещё раз') })
+  }
+  document.addEventListener('click', function (e) {
+    var sw = e.target.closest('.sw')
+    if (sw) { setBanner(sw.getAttribute('data-c'), document.getElementById('banMsg')); return }
+  })
+  var banApply = document.getElementById('banApply')
+  if (banApply) banApply.onclick = function () {
+    setBanner(document.getElementById('banHex').value.trim(), document.getElementById('banMsg'))
+  }
+  var banHexEl = document.getElementById('banHex')
+  if (banHexEl) banHexEl.addEventListener('keydown', function (e) { if (e.key === 'Enter' && banApply) banApply.onclick() })
+  var banColor = document.getElementById('banColor')
+  if (banColor) banColor.addEventListener('input', function () { document.getElementById('banHex').value = banColor.value })
+  markSwatches(document.getElementById('banHex').value)
+
+  var nickBtn = document.getElementById('nickBtn')
+  if (nickBtn) nickBtn.onclick = function () {
+    var nick = document.getElementById('nick').value.trim()
+    var nickMsg = document.getElementById('nickMsg')
+    if (!nick) { msg(nickMsg, 'Введи ник'); return }
+    nickBtn.disabled = true
+    fetch('/v2/users/me', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nickname: nick }) })
+      .then(function (r) { return r.json().catch(function () { return {} }).then(function (d) {
+        if (!r.ok) { msg(nickMsg, d.message || 'Не удалось сохранить ник'); return }
+        msg(nickMsg, 'Ник сохранён: ' + d.nickname, true)
+        var pn = document.getElementById('profNick')
+        if (pn) pn.textContent = d.nickname
+        if (d.avatarUrl) setAvaImg(d.avatarUrl)
+      }) })
+      .catch(function () { msg(nickMsg, 'Сеть недоступна — попробуй ещё раз') })
+      .then(function () { nickBtn.disabled = false })
+  }
+  function setAvaImg(src) {
+    var el = document.getElementById('profAva')
+    if (el) el.outerHTML = '<img class="prof-ava" id="profAva" src="' + esc(src) + '" alt="" />'
+  }
+  var avaBtn = document.getElementById('avaBtn')
+  var avaFile = document.getElementById('avaFile')
+  var avaClear = document.getElementById('avaClear')
+  function patchAvatar(b64, msgEl) {
+    avaBtn.disabled = true
+    if (avaClear) avaClear.disabled = true
+    fetch('/v2/users/me', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ avatar: b64 }) })
+      .then(function (r) { return r.json().catch(function () { return {} }).then(function (d) {
+        if (!r.ok) { msg(msgEl, d.message || 'Не загрузилось'); return }
+        if (b64 === '') { window.location.reload(); return }
+        if (d.avatarUrl) setAvaImg(d.avatarUrl)
+        msg(msgEl, 'Аватарка обновлена', true)
+        if (avaFile) avaFile.value = ''
+      }) })
+      .catch(function () { msg(msgEl, 'Сеть недоступна — попробуй ещё раз') })
+      .then(function () { avaBtn.disabled = false; if (avaClear) avaClear.disabled = false })
+  }
+  if (avaBtn && avaFile) avaBtn.onclick = function () {
+    var f = avaFile.files && avaFile.files[0]
+    var avaMsg = document.getElementById('avaMsg')
+    if (!f) { msg(avaMsg, 'Сначала выбери файл'); return }
+    if (f.size > 1.8 * 1024 * 1024) { msg(avaMsg, 'Файл слишком большой — максимум 1.8 МБ'); return }
+    var rd = new FileReader()
+    rd.onload = function () {
+      var b64 = String(rd.result).split(',')[1] || ''
+      if (!b64) { msg(avaMsg, 'Не удалось прочитать файл'); return }
+      patchAvatar(b64, avaMsg)
+    }
+    rd.onerror = function () { msg(avaMsg, 'Не удалось прочитать файл') }
+    rd.readAsDataURL(f)
+  }
+  if (avaClear) avaClear.onclick = function () {
+    if (!confirm('Убрать свою аватарку?')) return
+    patchAvatar('', document.getElementById('avaMsg'))
+  }
+})();
+`
+
+export const profilePage = ({ user }) => {
+  const logged = esc(user.nickname)
+  const letter = esc((user.discordName || user.nickname || 'E').slice(0, 1).toUpperCase())
+  const ava = user.avatarUrl
+    ? `<img class="prof-ava" id="profAva" src="${esc(user.avatarUrl)}" alt="" />`
+    : `<div class="prof-ava" id="profAva">${letter}</div>`
+  const roles = (user.roles || []).map((r) => `<span class="p-badge ${esc(r)}">${esc(r)}</span>`).join('')
+  const swatches = BANNER_COLORS.map((hex) =>
+    `<button class="sw" data-c="${hex}" style="background:${hex}" title="${hex}"></button>`,
+  ).join('')
+  return HEAD('Профиль — Enemy') + NAV({ logged }) + `
+<div class="wrap" style="max-width:920px">
+  <a class="prof-back" href="/">${ICON('ic-arrow')}На сайт</a>
+  <div class="panel profile" style="margin-top:16px">
+    <div class="prof-banner" id="profBanner" style="background:${bannerBg(user.banner)}"></div>
+    <div class="prof-body">
+      ${ava}
+      <div>
+        <div class="prof-nick" id="profNick">${esc(user.nickname)}</div>
+        <div class="prof-disc">${esc(user.discordName || '')} · Discord</div>
+        ${roles ? `<div class="prof-roles">${roles}</div>` : ''}
+      </div>
+    </div>
+  </div>
+  <div class="grid2" style="margin-top:22px">
+    <div class="panel">
+      <h2>Ник</h2>
+      <p class="sub">2–20 символов, без дублей. Ник связан с аккаунтом и лаунчером.</p>
+      <input id="nick" value="${esc(user.nickname)}" maxlength="20" autocomplete="off" placeholder="Ник Enemy" />
+      <button class="btn btn-block" id="nickBtn">${ICON('ic-check')}Сохранить ник</button>
+      <div class="msg" id="nickMsg"></div>
+    </div>
+    <div class="panel">
+      <h2>Аватарка</h2>
+      <p class="sub">PNG, JPEG или WEBP до 1.8 МБ. Если убрать — вернётся обычная аватарка (Discord или голова лицензии).</p>
+      <input type="file" id="avaFile" accept="image/png,image/jpeg,image/webp" />
+      <button class="btn btn-block" id="avaBtn">${ICON('ic-image')}Загрузить аватарку</button>
+      <button class="btn btn-block ghost" id="avaClear">Убрать аватарку</button>
+      <div class="msg" id="avaMsg"></div>
+    </div>
+  </div>
+  <div class="panel" style="margin-top:22px">
+    <h2>Цвет баннера</h2>
+    <p class="sub">Баннер — полоса над профилем. Тот же цвет, что и в лаунчере.</p>
+    <span class="lab">Пресеты</span>
+    <div class="swatches">
+      <button class="sw none" data-c="" title="Без баннера"></button>
+      ${swatches}
+    </div>
+    <div class="sw-custom">
+      <span class="lab">Свой цвет</span>
+      <input type="color" id="banColor" value="${user.banner || '#5b8cff'}" />
+      <input type="text" id="banHex" value="${esc(user.banner)}" maxlength="7" placeholder="#5b8cff" />
+      <button class="btn sm" id="banApply">Применить</button>
+    </div>
+    <div class="msg" id="banMsg"></div>
+  </div>
+</div>` + FOOT + `<script>${PROFILE_SCRIPT}</script>`
+}
 
 /// Кастомная страница подтверждения входа в лаунчер — не дефолтное
 /// «уведомление», а отдельный дизайн. kind = 'ok' | 'frozen'.

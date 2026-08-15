@@ -43,7 +43,7 @@ import {
   setUserRoles,
 } from './db.js'
 import { requireAuth, setSessionReader, signAccess, verifyAccess } from './auth.js'
-import { adminPage, confirmPage, errorPage, sitePage } from './site.js'
+import { adminPage, confirmPage, errorPage, profilePage, sitePage } from './site.js'
 
 const SRC_DIR = dirname(fileURLToPath(import.meta.url))
 const APP_ROOT = join(SRC_DIR, '..')
@@ -196,12 +196,31 @@ const mcUuidForName = async (name) => {
 }
 const mcHeadUrl = (uuid) => (uuid ? 'https://mc-heads.net/avatar/' + uuid + '/64' : null)
 
-// Голова лицензии для ника: если ник совпал с лицензионным аккаунтом Minecraft,
-// показываем его скин-голову, иначе обычный аватар (Discord).
+// MIME по magic-байтам картинки: свою аватарку храним base64, а формат
+// определяем при отдаче, чтобы не хранить лишнее поле.
+const avatarMime = (b64) => {
+  const head = Buffer.from(b64, 'base64').slice(0, 12).toString('binary')
+  if (head.startsWith('\x89PNG')) return 'image/png'
+  if (head.startsWith('\xFF\xD8\xFF')) return 'image/jpeg'
+  if (head.startsWith('GIF8')) return 'image/gif'
+  if (head.startsWith('RIFF') && head.slice(8, 12) === 'WEBP') return 'image/webp'
+  return 'image/png'
+}
+
+// Своя аватарка с сайта важнее всего; дальше — голова лицензии для ника,
+// и только потом Discord-аватар.
 const avatarForUser = async (user) => {
+  if (user.custom_avatar) return 'data:' + avatarMime(user.custom_avatar) + ';base64,' + user.custom_avatar
   const uuid = await mcUuidForName(user.nickname)
   return (uuid && mcHeadUrl(uuid)) || user.discord_avatar || null
 }
+
+// Для списков (друзья, поиск, заявки) Mojang-головы не тянем ради скорости:
+// своя аватарка, иначе Discord.
+const avatarUrlOf = (user) =>
+  (user.custom_avatar ? 'data:' + avatarMime(user.custom_avatar) + ';base64,' + user.custom_avatar : null) ||
+  user.discord_avatar ||
+  null
 
 // ============ Вход (device-code) ============
 
@@ -293,6 +312,32 @@ app.get('/', ah(async (req, res) => {
   res
     .set('Content-Type', 'text/html; charset=utf-8')
     .send(sitePage({ user: user ? { nickname: user.nickname, discordName: user.discord_username, avatarUrl: user.discord_avatar } : null }))
+}))
+
+// ============ Профиль на сайте ============
+
+app.get('/profile', ah(async (req, res) => {
+  const user = await siteUserByToken(readCookie(req, SESSION_COOKIE))
+  if (!user) {
+    return res.redirect(SITE_PAGE + '?redirect=' + encodeURIComponent('/profile'))
+  }
+  if (user.banned) {
+    clearSessionCookie(res)
+    return res
+      .set('Content-Type', 'text/html; charset=utf-8')
+      .send(errorPage('Аккаунт забанен', 'Твой аккаунт забанен администратором. Чтобы снять бан — начни вход в лаунчере: обжалование уйдёт администратору, и он решит.'))
+  }
+  res
+    .set('Content-Type', 'text/html; charset=utf-8')
+    .send(profilePage({
+      user: {
+        nickname: user.nickname,
+        discordName: user.discord_username,
+        avatarUrl: await avatarForUser(user),
+        banner: user.banner || '',
+        roles: rolesOf(user),
+      },
+    }))
 }))
 
 app.get('/logout', ah(async (req, res) => {
@@ -809,20 +854,52 @@ const NICK_RE = /^[\p{L}\p{N}\p{P}\p{S} ]{2,20}$/u
 const normalizeNick = (s) => String(s || '').trim().replace(/\s+/g, ' ').slice(0, 20)
 
 const BANNER_RE = /^#[0-9a-fA-F]{3,8}$/
+const AVATAR_MAX_B64 = 2_500_000
+const AVATAR_MAX_BYTES = 1_800_000
 
-/// Смена ника и/или цвета баннера. Работает из лаунчера (Bearer) и с сайта
-/// (сессия). Дубли ников запрещены (в т.ч. с разным регистром) индексом в БД.
+const isAvatarImage = (buf) => {
+  const head = buf.slice(0, 12).toString('binary')
+  return (
+    head.startsWith('\x89PNG') ||
+    head.startsWith('\xFF\xD8\xFF') ||
+    head.startsWith('GIF8') ||
+    (head.startsWith('RIFF') && buf.slice(8, 12).toString('binary') === 'WEBP')
+  )
+}
+
+/// Смена ника, цвета баннера и/или своей аватарки. Работает из лаунчера
+/// (Bearer) и с сайта (сессия). Дубли ников запрещены (в т.ч. с разным
+/// регистром) индексом в БД.
 app.patch('/v2/users/me', requireAuth, ah(async (req, res) => {
   const body = req.body || {}
   const hasBanner = typeof body.banner === 'string'
   const hasNick = typeof body.nickname === 'string' && body.nickname.trim()
-  if (!hasBanner && !hasNick) return res.status(400).json({ message: 'Не передано ни одно поле' })
+  const hasAvatar = typeof body.avatar === 'string'
+  if (!hasBanner && !hasNick && !hasAvatar) return res.status(400).json({ message: 'Не передано ни одно поле' })
   if (hasBanner) {
     const b = body.banner.trim()
     if (b && !BANNER_RE.test(b)) {
       return res.status(400).json({ message: 'Цвет баннера — hex, например #5b8cff' })
     }
     await query('UPDATE users SET banner = $1 WHERE id = $2', [b, req.userId])
+  }
+  if (hasAvatar) {
+    const b64 = body.avatar.trim().replace(/^data:image\/[a-z+.-]+;base64,/, '')
+    if (b64 === '') {
+      await query('UPDATE users SET custom_avatar = NULL WHERE id = $1', [req.userId])
+    } else {
+      if (b64.length > AVATAR_MAX_B64 || !/^[A-Za-z0-9+/]+={0,2}$/.test(b64)) {
+        return res.status(400).json({ message: 'Аватарка слишком большая или повреждена — максимум ~1.8 МБ' })
+      }
+      const buf = Buffer.from(b64, 'base64')
+      if (!buf.length || buf.length > AVATAR_MAX_BYTES) {
+        return res.status(400).json({ message: 'Аватарка слишком большая — максимум ~1.8 МБ' })
+      }
+      if (!isAvatarImage(buf)) {
+        return res.status(400).json({ message: 'Можно загрузить только PNG, JPEG или WEBP' })
+      }
+      await query('UPDATE users SET custom_avatar = $1 WHERE id = $2', [b64, req.userId])
+    }
   }
   if (hasNick) {
     const nick = normalizeNick(body.nickname)
@@ -870,7 +947,7 @@ app.patch('/v2/users/me/privacy', requireAuth, (req, res) =>
 
 app.get('/v2/core/blocks', requireAuth, ah(async (req, res) => {
   const { rows } = await query(
-    `SELECT b.blocked_id, u.nickname, u.discord_avatar
+    `SELECT b.blocked_id, u.nickname, u.discord_avatar, u.custom_avatar
      FROM blocks b LEFT JOIN users u ON u.id = b.blocked_id
      WHERE b.blocker_id = $1 ORDER BY b.created_at DESC`,
     [req.userId],
@@ -878,7 +955,7 @@ app.get('/v2/core/blocks', requireAuth, ah(async (req, res) => {
   res.json({
     items: rows.map((r) => ({
       blockedId: String(r.blocked_id),
-      user: { id: String(r.blocked_id), nickname: r.nickname, avatarUrl: r.discord_avatar || null },
+      user: { id: String(r.blocked_id), nickname: r.nickname, avatarUrl: avatarUrlOf(r) },
     })),
   })
 }))
@@ -1000,7 +1077,7 @@ const PRESENCE_ONLINE_MS = 45000
 const friendRow = (user) => ({
   userId: String(user.id),
   nickname: user.nickname,
-  avatarUrl: user.discord_avatar || null,
+  avatarUrl: avatarUrlOf(user),
   banner: user.banner || '',
 })
 
@@ -1067,18 +1144,18 @@ app.get('/v2/friends', requireAuth, ah(async (req, res) => {
 
 app.get('/v2/friends/requests', requireAuth, ah(async (req, res) => {
   const inc = await query(
-    `SELECT fr.id, fr.from_id, u.nickname, u.discord_avatar
+    `SELECT fr.id, fr.from_id, u.nickname, u.discord_avatar, u.custom_avatar
      FROM friend_requests fr JOIN users u ON u.id = fr.from_id
      WHERE fr.to_id = $1 AND fr.status = 'pending' ORDER BY fr.created_at DESC`,
     [req.userId],
   )
   const out = await query(
-    `SELECT fr.id, fr.to_id, u.nickname, u.discord_avatar
+    `SELECT fr.id, fr.to_id, u.nickname, u.discord_avatar, u.custom_avatar
      FROM friend_requests fr JOIN users u ON u.id = fr.to_id
      WHERE fr.from_id = $1 AND fr.status = 'pending' ORDER BY fr.created_at DESC`,
     [req.userId],
   )
-  const map = (r) => ({ id: String(r.id), userId: String(r.from_id || r.to_id), nickname: r.nickname, avatarUrl: r.discord_avatar || null })
+  const map = (r) => ({ id: String(r.id), userId: String(r.from_id || r.to_id), nickname: r.nickname, avatarUrl: avatarUrlOf(r) })
   res.json({ incoming: inc.rows.map(map), outgoing: out.rows.map(map) })
 }))
 
@@ -1111,7 +1188,7 @@ app.get('/v2/friends/search', requireAuth, ah(async (req, res) => {
     results.push({
       userId: String(uid),
       nickname: u.nickname,
-      avatarUrl: u.discord_avatar || null,
+      avatarUrl: avatarUrlOf(u),
       roles: rolesOf(u),
       isFriend,
       pending,
@@ -1223,6 +1300,7 @@ app.get('/v2/friends/profile/:uid', requireAuth, ah(async (req, res) => {
   res.json({
     nick: u.nickname,
     nickname: u.nickname,
+    avatarUrl: avatarUrlOf(u),
     roles: rolesOf(u),
     banner: u.banner || '',
     text: playing ? (p.server || p.build || 'Играет') : online ? 'В лаунчере' : 'Игрок Enemy',
@@ -1304,18 +1382,18 @@ app.get('/v2/friends/poll', requireAuth, ah(async (req, res) => {
     if (user) presence.push(await presenceRow(req.userId, user))
   }
   const inc = await query(
-    `SELECT fr.id, fr.from_id, u.nickname, u.discord_avatar
+    `SELECT fr.id, fr.from_id, u.nickname, u.discord_avatar, u.custom_avatar
      FROM friend_requests fr JOIN users u ON u.id = fr.from_id
      WHERE fr.to_id = $1 AND fr.status = 'pending' ORDER BY fr.created_at DESC`,
     [req.userId],
   )
   const out = await query(
-    `SELECT fr.id, fr.to_id, u.nickname, u.discord_avatar
+    `SELECT fr.id, fr.to_id, u.nickname, u.discord_avatar, u.custom_avatar
      FROM friend_requests fr JOIN users u ON u.id = fr.to_id
      WHERE fr.from_id = $1 AND fr.status = 'pending' ORDER BY fr.created_at DESC`,
     [req.userId],
   )
-  const map = (r) => ({ id: String(r.id), userId: String(r.from_id || r.to_id), nickname: r.nickname, avatarUrl: r.discord_avatar || null })
+  const map = (r) => ({ id: String(r.id), userId: String(r.from_id || r.to_id), nickname: r.nickname, avatarUrl: avatarUrlOf(r) })
   const since = Number(req.query.since) || Date.now() - 10 * 60000
   const byId = new Map(presence.map((p) => [Number(p.userId), p]))
   const messages = (await newIncomingMessages(req.userId, ids, since)).map((row) => ({
