@@ -156,35 +156,48 @@ footer{border-top:1px solid var(--line);background:rgba(8,11,17,.6);padding:52px
 .foot nav a{display:block;color:var(--mut);font-size:13.5px;margin-bottom:10px;transition:color .2s,transform .2s}
 .foot nav a:hover{color:var(--txt);transform:translateX(3px)}
 .legal{margin-top:44px;color:var(--faint);font-size:12px;line-height:1.7;max-width:900px}
-/* ===== Профиль ===== */
-.panel.profile{padding:0;overflow:hidden}
-.prof-banner{height:150px}
-.prof-body{display:flex;gap:20px;align-items:center;padding:0 30px 28px;margin-top:-46px}
-.prof-ava{width:88px;height:88px;border-radius:24px;object-fit:cover;border:5px solid var(--bg);background:var(--line);flex:none;display:grid;place-items:center;font-family:'Unbounded';font-weight:800;font-size:30px;color:var(--acc)}
-.prof-ava .ic{width:40px;height:40px}
-.prof-nick{font-family:'Unbounded';font-weight:700;font-size:19px;line-height:1.2}
-.prof-disc{color:var(--mut);font-size:13.5px;margin-top:5px}
-.prof-roles{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
-.p-badge{font-family:'Unbounded';font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:5px 9px;border-radius:7px;line-height:1}
+/* ===== Профиль (премиум) ===== */
+.panel.profile{padding:0;overflow:hidden;border-radius:22px}
+.prof-banner{position:relative;height:190px}
+.prof-banner::before{content:'';position:absolute;inset:0;background:linear-gradient(115deg,rgba(255,255,255,.16) 0%,rgba(255,255,255,.16) 18%,rgba(255,255,255,0) 42%)}
+.prof-banner::after{content:'';position:absolute;right:-30px;top:-40px;width:240px;height:240px;background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.15),rgba(255,255,255,0) 68%)}
+.prof-body{position:relative;display:flex;gap:24px;align-items:flex-end;padding:0 30px 30px;margin-top:-70px}
+.prof-ava-wrap{position:relative;flex:none;padding:6px}
+.prof-ava{width:104px;height:104px;border-radius:28px;object-fit:cover;border:4px solid var(--bg);background:var(--line);display:grid;place-items:center;font-family:'Unbounded';font-weight:800;font-size:34px;color:var(--acc);position:relative;z-index:1;box-shadow:0 12px 32px rgba(0,0,0,.45)}
+.prof-ava .ic{width:44px;height:44px}
+.prof-ava-wrap::before{content:'';position:absolute;inset:0;border-radius:34px;background:conic-gradient(from 180deg,#3EA6FF,rgba(255,255,255,.25) 30%,#8B5CF6 60%,#3EA6FF);filter:blur(7px);opacity:.7}
+.prof-ava-wrap::after{content:'';position:absolute;inset:6px;border-radius:26px;background:var(--bg)}
+.prof-who{min-width:0;padding-bottom:6px}
+.prof-nick{font-family:'Unbounded';font-weight:800;font-size:26px;line-height:1.1;letter-spacing:-.01em;background:linear-gradient(100deg,#F2F6FB,#9DC7FF);-webkit-background-clip:text;background-clip:text;color:transparent;word-break:break-word}
+.prof-disc{display:flex;align-items:center;gap:8px;color:var(--mut);font-size:13.5px;margin-top:9px}
+.prof-disc .ic{width:16px;height:16px;color:#5865F2;flex:none}
+.prof-roles{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}
+.p-badge{font-family:'Unbounded';font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:6px 11px;border-radius:8px;line-height:1}
 .p-badge.owner{background:linear-gradient(135deg,#FFB84D,#FF8A3D);color:#1A1206}
 .p-badge.admin{background:linear-gradient(135deg,#FF6B6B,#F43F5E);color:#1A0608}
 .p-badge.moder{background:linear-gradient(135deg,#4BE38B,#22C55E);color:#052012}
 .p-badge.tester{background:linear-gradient(135deg,#8B5CF6,#6D28D9);color:#12041F}
+.panel .ph{display:flex;align-items:flex-start;gap:14px;margin-bottom:18px}
+.panel .ph .pic{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:rgba(62,166,255,.12);color:var(--acc);flex:none;box-shadow:0 6px 16px rgba(62,166,255,.18)}
+.panel .ph .pic svg{width:18px;height:18px}
+.panel .ph h2{margin:0;font-family:'Unbounded';font-weight:600;font-size:15px;line-height:1.3}
+.panel .ph p{margin:3px 0 0;color:var(--mut);font-size:12.5px;line-height:1.55}
 .lab{display:block;margin:0 0 10px;color:var(--mut);font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
 .swatches{display:flex;flex-wrap:wrap;gap:10px}
-.sw{width:34px;height:34px;border-radius:10px;border:2px solid rgba(255,255,255,.06);cursor:pointer;transition:transform .15s,border-color .15s}
-.sw:hover{transform:scale(1.1)}
-.sw.on{border-color:#fff}
+.sw{width:36px;height:36px;border-radius:11px;border:2px solid rgba(255,255,255,.06);cursor:pointer;transition:transform .15s,border-color .15s,box-shadow .15s}
+.sw:hover{transform:scale(1.12)}
+.sw.on{border-color:#fff;box-shadow:0 0 0 3px rgba(62,166,255,.25)}
 .sw.none{background:linear-gradient(135deg,rgba(120,170,255,.3),rgba(120,170,255,.06));position:relative}
 .sw.none::after{content:'×';position:absolute;inset:0;display:grid;place-items:center;color:var(--faint);font-size:15px;font-weight:800}
-.sw-custom{display:flex;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap}
-.sw-custom input[type="color"]{width:44px;height:38px;padding:3px;border-radius:9px;background:var(--panel);flex:none}
+.sw-custom{display:flex;align-items:center;gap:12px;margin-top:18px;flex-wrap:wrap}
+.sw-custom input[type="color"]{width:46px;height:40px;padding:3px;border-radius:10px;background:var(--panel);flex:none}
 .sw-custom input[type="text"]{width:130px;flex:none}
 .sw-custom .lab{margin:0}
 input[type="file"]{padding:10px;font-size:13px}
-.prof-back{display:inline-flex;align-items:center;gap:8px;color:var(--mut);font-size:13.5px;font-weight:600;margin:34px 0 0;transition:color .2s}
-.prof-back:hover{color:var(--txt)}
+.prof-back{display:inline-flex;align-items:center;gap:8px;color:var(--mut);font-size:13.5px;font-weight:600;margin:34px 0 0;transition:color .2s,transform .2s}
+.prof-back:hover{color:var(--txt);transform:translateX(-3px)}
 .prof-back .ic{width:16px;height:16px;transform:rotate(180deg)}
+@media (max-width:640px){.prof-banner{height:150px}.prof-body{flex-wrap:wrap;align-items:center;padding-top:6px}.prof-nick{font-size:21px}}
 @media (max-width:760px){.hero{padding-top:60px}.wrap{padding-bottom:64px}}
 `
 
@@ -493,39 +506,36 @@ export const profilePage = ({ user }) => {
     `<button class="sw" data-c="${hex}" style="background:${hex}" title="${hex}"></button>`,
   ).join('')
   return HEAD('Профиль — Enemy') + NAV({ logged }) + `
-<div class="wrap" style="max-width:920px">
+<div class="wrap" style="max-width:960px">
   <a class="prof-back" href="/">${ICON('ic-arrow')}На сайт</a>
   <div class="panel profile" style="margin-top:16px">
     <div class="prof-banner" id="profBanner" style="background:${bannerBg(user.banner)}"></div>
     <div class="prof-body">
-      ${ava}
-      <div>
+      <div class="prof-ava-wrap">${ava}</div>
+      <div class="prof-who">
         <div class="prof-nick" id="profNick">${esc(user.nickname)}</div>
-        <div class="prof-disc">${esc(user.discordName || '')} · Discord</div>
+        <div class="prof-disc">${ICON('ic-discord')}<span>${esc(user.discordName || '')} · Discord</span></div>
         ${roles ? `<div class="prof-roles">${roles}</div>` : ''}
       </div>
     </div>
   </div>
-  <div class="grid2" style="margin-top:22px">
+  <div class="grid2" style="margin-top:24px">
     <div class="panel">
-      <h2>Ник</h2>
-      <p class="sub">2–20 символов, без дублей. Ник связан с аккаунтом и лаунчером.</p>
+      <div class="ph"><span class="pic">${ICON('ic-user')}</span><div><h2>Ник</h2><p>2–20 символов, без дублей. Ник связан с аккаунтом и лаунчером.</p></div></div>
       <input id="nick" value="${esc(user.nickname)}" maxlength="20" autocomplete="off" placeholder="Ник Enemy" />
       <button class="btn btn-block" id="nickBtn">${ICON('ic-check')}Сохранить ник</button>
       <div class="msg" id="nickMsg"></div>
     </div>
     <div class="panel">
-      <h2>Аватарка</h2>
-      <p class="sub">PNG, JPEG или WEBP до 1.8 МБ. Если убрать — вернётся обычная аватарка (Discord или голова лицензии).</p>
+      <div class="ph"><span class="pic">${ICON('ic-image')}</span><div><h2>Аватарка</h2><p>PNG, JPEG или WEBP до 1.8 МБ. Уберёшь — вернётся обычная аватарка.</p></div></div>
       <input type="file" id="avaFile" accept="image/png,image/jpeg,image/webp" />
       <button class="btn btn-block" id="avaBtn">${ICON('ic-image')}Загрузить аватарку</button>
       <button class="btn btn-block ghost" id="avaClear">Убрать аватарку</button>
       <div class="msg" id="avaMsg"></div>
     </div>
   </div>
-  <div class="panel" style="margin-top:22px">
-    <h2>Цвет баннера</h2>
-    <p class="sub">Баннер — полоса над профилем. Тот же цвет, что и в лаунчере.</p>
+  <div class="panel" style="margin-top:24px">
+    <div class="ph"><span class="pic">${ICON('ic-palette')}</span><div><h2>Цвет баннера</h2><p>Баннер — полоса над профилем. Тот же цвет, что и в лаунчере.</p></div></div>
     <span class="lab">Пресеты</span>
     <div class="swatches">
       <button class="sw none" data-c="" title="Без баннера"></button>
@@ -792,7 +802,9 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
         return '<button class="role-chip' + (on ? ' on' : '') + '" data-uid="' + u.id + '" data-role="' + r + '">' + r.charAt(0).toUpperCase() + r.slice(1) + '</button>'
       }).join('')
       tr.innerHTML = '<td style="padding:10px 16px;color:var(--faint);white-space:nowrap">' + u.id + '</td>' +
-        '<td style="padding:10px 8px"><input data-uid="' + u.id + '" value="' + esc2(u.nickname) + '" maxlength="20" style="max-width:150px;padding:8px 10px;font-size:13px" />' +
+        '<td style="padding:10px 8px">' + (u.avatarUrl
+          ? '<img src="' + esc2(u.avatarUrl) + '" style="width:34px;height:34px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:10px" />'
+          : '') + '<input data-uid="' + u.id + '" value="' + esc2(u.nickname) + '" maxlength="20" style="max-width:150px;padding:8px 10px;font-size:13px" />' +
         (u.banned ? ' <span style="color:#ff5f57;font-weight:800;font-size:11px">ЗАБАНЕН</span>' : '') + '</td>' +
         '<td style="padding:10px 8px;color:var(--mut)">' + esc2(u.discord_username || (u.discord_id ? '#' + u.discord_id : '—')) + '</td>' +
         '<td style="padding:10px 8px;white-space:nowrap;min-width:180px">' + chips + '</td>' +
@@ -868,6 +880,9 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
     if (!list.length) { el.innerHTML = '<p style="color:var(--faint);font-size:13px">Забаненных аккаунтов нет.</p>'; return }
     el.innerHTML = list.map(function (b) {
       return '<div style="display:flex;gap:10px;align-items:center;padding:8px 2px">' +
+        (b.avatarUrl
+          ? '<img src="' + esc2(b.avatarUrl) + '" style="width:30px;height:30px;border-radius:50%;object-fit:cover;flex:none" />'
+          : '') +
         '<b style="font-size:13.5px">' + esc2(b.nickname) + '</b>' +
         '<span style="color:var(--faint);font-size:12.5px">#' + esc2(b.id) + '</span>' +
         '<span style="flex:1;min-width:0;color:var(--mut);font-size:13px">' + (b.reason ? esc2(b.reason) : '<span style="color:var(--faint)">без причины</span>') + '</span>' +

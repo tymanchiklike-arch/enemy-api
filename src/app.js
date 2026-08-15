@@ -184,7 +184,7 @@ const mcUuidForName = async (name) => {
   let uuid = null
   try {
     const r = await fetch('https://api.mojang.com/users/profiles/minecraft/' + encodeURIComponent(key), {
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(1500),
     })
     if (r.ok) {
       const j = await r.json().catch(() => null)
@@ -208,11 +208,17 @@ const avatarMime = (b64) => {
 }
 
 // Своя аватарка с сайта важнее всего; дальше — голова лицензии для ника,
-// и только потом Discord-аватар.
+// и только потом Discord-аватар. Готовый URL кэшируем по пользователю, чтобы
+// профиль в лаунчере не ждал Mojang при каждом открытии.
+const AVATAR_URL_CACHE = new Map()
 const avatarForUser = async (user) => {
   if (user.custom_avatar) return 'data:' + avatarMime(user.custom_avatar) + ';base64,' + user.custom_avatar
+  const key = user.id
+  if (AVATAR_URL_CACHE.has(key)) return AVATAR_URL_CACHE.get(key)
   const uuid = await mcUuidForName(user.nickname)
-  return (uuid && mcHeadUrl(uuid)) || user.discord_avatar || null
+  const url = (uuid && mcHeadUrl(uuid)) || user.discord_avatar || null
+  AVATAR_URL_CACHE.set(key, url)
+  return url
 }
 
 // Для списков (друзья, поиск, заявки) Mojang-головы не тянем ради скорости:
@@ -311,7 +317,7 @@ app.get('/', ah(async (req, res) => {
   }
   res
     .set('Content-Type', 'text/html; charset=utf-8')
-    .send(sitePage({ user: user ? { nickname: user.nickname, discordName: user.discord_username, avatarUrl: user.discord_avatar } : null }))
+    .send(sitePage({ user: user ? { nickname: user.nickname, discordName: user.discord_username, avatarUrl: await avatarForUser(user) } : null }))
 }))
 
 // ============ Профиль на сайте ============
@@ -415,7 +421,7 @@ app.get('/admin/logout', (req, res) => {
 app.get('/v2/admin/users', ah(async (req, res) => {
   if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
   const { rows } = await query(
-    'SELECT id, nickname, discord_id, discord_username, email, roles, last_ip, created_at, banned, ban_reason FROM users ORDER BY created_at DESC LIMIT 500',
+    'SELECT id, nickname, discord_id, discord_username, email, roles, last_ip, created_at, banned, ban_reason, discord_avatar, custom_avatar FROM users ORDER BY created_at DESC LIMIT 500',
   )
   res.json({
     users: rows.map((r) => ({
@@ -429,6 +435,7 @@ app.get('/v2/admin/users', ah(async (req, res) => {
       created_at: r.created_at,
       banned: !!r.banned,
       ban_reason: r.ban_reason || null,
+      avatarUrl: avatarUrlOf(r),
     })),
   })
 }))
@@ -464,7 +471,7 @@ app.post('/v2/admin/unban-account', ah(async (req, res) => {
 app.get('/v2/admin/account-bans', ah(async (req, res) => {
   if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
   const { rows } = await query(
-    'SELECT id, nickname, discord_id, discord_username, ban_reason, ban_at FROM users WHERE banned = true ORDER BY ban_at DESC LIMIT 500',
+    'SELECT id, nickname, discord_id, discord_username, ban_reason, ban_at, discord_avatar, custom_avatar FROM users WHERE banned = true ORDER BY ban_at DESC LIMIT 500',
   )
   res.json({
     bans: rows.map((r) => ({
@@ -474,6 +481,7 @@ app.get('/v2/admin/account-bans', ah(async (req, res) => {
       discordName: r.discord_username,
       reason: r.ban_reason || null,
       at: r.ban_at,
+      avatarUrl: avatarUrlOf(r),
     })),
   })
 }))
@@ -668,7 +676,7 @@ app.get('/v2/auth/launcher/approve', ah(async (req, res) => {
   }
   const safeNick = user.nickname.replace(/[<>&"]/g, '')
   const acc = {
-    user: { nickname: user.nickname, discordName: user.discord_username, avatarUrl: user.discord_avatar },
+    user: { nickname: user.nickname, discordName: user.discord_username, avatarUrl: await avatarForUser(user) },
   }
   if (user.banned) {
     // Замороженный аккаунт: код уходит администратору, который и решит.
@@ -709,7 +717,7 @@ app.post('/v2/auth/launcher/accept', express.urlencoded({ extended: false }), ah
   }
   const safeNick = user.nickname.replace(/[<>&"]/g, '')
   const acc = {
-    user: { nickname: user.nickname, discordName: user.discord_username, avatarUrl: user.discord_avatar },
+    user: { nickname: user.nickname, discordName: user.discord_username, avatarUrl: await avatarForUser(user) },
   }
   if (user.banned) {
     await claimDeviceUser(row.device_code, user.id)
