@@ -402,54 +402,120 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
 </script>` + FOOT
   }
   return HEAD('Админ-панель') + NAV({ logged: '' }) + `
-<div class="wrap">
-  <div class="sechead"><span class="bar"></span><h2>Админ-панель</h2></div>
-  <p class="secd">Пользователи Enemy: смена ника, удаление аккаунта, выдача бейджа (Owner / Admin / Moder / Tester — один на игрока) по нику или id. Бейдж показывается в лаунчере рядом с ником. Ниже — баны по IP: заблокированный адрес не пройдёт ни в лаунчер, ни на сайт.</p>
-  <div class="panel" style="padding:0;overflow:hidden">
-    <table class="admin-table" style="width:100%;border-collapse:collapse;font-size:13.5px">
-      <thead><tr style="text-align:left;color:var(--faint);font-size:11px;letter-spacing:.08em;text-transform:uppercase">
-        <th style="padding:14px 16px">#</th>
-        <th style="padding:14px 8px">Ник</th>
-        <th style="padding:14px 8px">Discord</th>
-        <th style="padding:14px 8px">Роли</th>
-        <th style="padding:14px 8px">IP</th>
-        <th style="padding:14px 8px">Создан</th>
-        <th style="padding:14px 16px;text-align:right">Действия</th>
-      </tr></thead>
-      <tbody id="rows"></tbody>
-    </table>
-    <div id="st" style="padding:16px;color:var(--mut);font-size:13px"></div>
-  </div>
-
-  <div class="sechead" style="margin-top:26px"><span class="bar"></span><h2>Баны по IP</h2></div>
-  <div class="panel" style="padding:16px">
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <input id="banIp" placeholder="IP, например 1.2.3.4" style="flex:1;min-width:180px;padding:8px 10px;font-size:13px" />
-      <input id="banReason" placeholder="Причина (необязательно)" style="flex:1.4;min-width:180px;padding:8px 10px;font-size:13px" />
-      <button class="btn" id="banAdd" style="flex:none">Забанить</button>
+<div class="wrap" style="max-width:1080px">
+  <div class="adm-top">
+    <div class="sechead" style="margin:0"><span class="bar"></span><h2>Админ-панель</h2></div>
+    <div class="adm-top-r">
+      <a class="subtle" href="/">На сайт</a>
+      <a class="btn ghost sm" href="/admin/logout">${ICON('ic-key')}Выйти</a>
     </div>
-    <div id="banList" style="margin-top:12px"></div>
   </div>
 
-  <div class="sechead" style="margin-top:26px"><span class="bar"></span><h2>Запросы на вход</h2></div>
-  <p class="secd">Когда кто-то входит в лаунчер, код привязывается к аккаунту, и здесь появляется заявка — подтверждаешь или отклоняешь её ты. Обновляется автоматически.</p>
-  <div class="panel" style="padding:8px 16px">
-    <div id="loginReqs" style="min-height:24px"></div>
-  </div>
+  <nav class="adm-nav" id="admNav">
+    <button class="adm-tab on" data-tab="users">${ICON('ic-users')}Игроки<span class="adb" id="ctUsers"></span></button>
+    <button class="adm-tab" data-tab="reqs">${ICON('ic-key')}Вход<span class="adb warn" id="ctReqs"></span></button>
+    <button class="adm-tab" data-tab="bans">${ICON('ic-shield')}Баны<span class="adb" id="ctBans"></span></button>
+    <button class="adm-tab" data-tab="admins">${ICON('ic-lock')}Доступ<span class="adb" id="ctAdmins"></span></button>
+  </nav>
 
-  <div class="sechead" style="margin-top:26px"><span class="bar"></span><h2>Доступ администраторов</h2></div>
-  <p class="secd">Выдай доступ к админ-панели по нику: человек войдёт на сайт через Discord — и откроется панель без пароля.</p>
-  <div class="panel" style="padding:16px">
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <input id="admNick" placeholder="Ник игрока (Enemy)" style="flex:1;min-width:200px;padding:8px 10px;font-size:13px" />
-      <button class="btn" id="admAdd" style="flex:none">Дать доступ</button>
+  <section class="adm-pane on" id="pane-users">
+    <div class="adm-card">
+      <div class="adm-h"><h3>Игроки</h3><input id="qUsers" placeholder="Поиск по нику или id…" /></div>
+      <div class="adm-scroll">
+        <table class="admin-table">
+          <thead><tr>
+            <th>#</th><th>Ник</th><th>Discord</th><th>Роли</th><th>IP</th><th>Создан</th><th class="r">Действия</th>
+          </tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div id="st" class="adm-st"></div>
     </div>
-    <div id="admList" style="margin-top:12px"></div>
-  </div>
+  </section>
 
-  <a href="/admin/logout" style="color:var(--mut);font-size:13.5px;display:inline-block;margin-top:16px">Выйти из админки →</a>
+  <section class="adm-pane" id="pane-reqs">
+    <div class="adm-card">
+      <div class="adm-h"><h3>Запросы на вход</h3></div>
+      <p class="secd">Код привязывается к аккаунту — подтверди или отклони вход. Обновляется автоматически.</p>
+      <div class="adm-chips" id="reqCats">
+        <button class="adm-chip on" data-cat="pending">Ожидают</button>
+        <button class="adm-chip" data-cat="frozen">Замороженные</button>
+        <button class="adm-chip" data-cat="accepted">Одобренные</button>
+        <button class="adm-chip" data-cat="denied">Отклонённые</button>
+      </div>
+      <div id="loginReqs" class="adm-list"></div>
+    </div>
+  </section>
+
+  <section class="adm-pane" id="pane-bans">
+    <div class="adm-card">
+      <div class="adm-h"><h3>Баны по IP</h3></div>
+      <p class="secd">Заблокированный IP не пройдёт ни в лаунчер, ни на сайт.</p>
+      <div class="adm-row">
+        <input id="banIp" placeholder="IP, например 1.2.3.4" />
+        <input id="banReason" placeholder="Причина (необязательно)" />
+        <button class="btn" id="banAdd">${ICON('ic-shield')}Забанить</button>
+      </div>
+      <div id="banList" class="adm-list"></div>
+    </div>
+  </section>
+
+  <section class="adm-pane" id="pane-admins">
+    <div class="adm-card">
+      <div class="adm-h"><h3>Доступ администраторов</h3></div>
+      <p class="secd">Выдай доступ по нику: человек войдёт на сайт через Discord — и панель откроется без пароля.</p>
+      <div class="adm-row">
+        <input id="admNick" placeholder="Ник игрока (Enemy)" />
+        <button class="btn" id="admAdd">${ICON('ic-user')}Дать доступ</button>
+      </div>
+      <div id="admList" class="adm-list"></div>
+    </div>
+  </section>
 </div>
 <style>
+.adm-top{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin:56px 0 22px;flex-wrap:wrap}
+.adm-top-r{display:flex;align-items:center;gap:16px}
+.adm-nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:26px}
+.adm-tab{display:inline-flex;align-items:center;gap:9px;border:1px solid var(--line);background:rgba(148,163,200,.06);color:var(--mut);border-radius:12px;padding:10px 16px;font-family:'Manrope';font-weight:700;font-size:13.5px;cursor:pointer;transition:all .18s}
+.adm-tab .ic{width:16px;height:16px;color:var(--faint);transition:color .18s}
+.adm-tab:hover{color:var(--txt);background:rgba(148,163,200,.12)}
+.adm-tab.on{color:#fff;background:linear-gradient(135deg,rgba(62,166,255,.22),rgba(30,139,232,.12));border-color:rgba(62,166,255,.5);box-shadow:0 4px 18px rgba(62,166,255,.15)}
+.adm-tab.on .ic{color:var(--acc)}
+.adb{min-width:20px;height:20px;padding:0 6px;border-radius:99px;background:rgba(148,163,200,.14);color:var(--mut);display:inline-grid;place-items:center;font-size:11px;font-weight:800;line-height:1}
+.adb:empty{display:none}
+.adb.warn{background:rgba(255,216,61,.16);color:#ffd83d}
+.adm-pane{display:none}
+.adm-pane.on{display:block;animation:fadeIn .25s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.adm-card{background:linear-gradient(180deg,rgba(22,30,48,.7),rgba(17,25,39,.7));border:1px solid var(--line);border-radius:18px;padding:22px;overflow:hidden}
+.adm-h{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+.adm-h h3{margin:0;font-family:'Unbounded';font-weight:700;font-size:16px;letter-spacing:.01em}
+.adm-h input{max-width:260px;padding:10px 13px;font-size:13.5px}
+.adm-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.adm-row input{flex:1;min-width:170px;padding:10px 13px;font-size:13.5px}
+.adm-list{margin-top:14px}
+.adm-list>*{border-top:1px solid var(--line)}
+.adm-chips{display:flex;gap:7px;flex-wrap:wrap;margin:14px 0 4px}
+.adm-chip{border:1px solid var(--line);background:rgba(148,163,200,.06);color:var(--faint);border-radius:99px;padding:7px 14px;font-family:'Manrope';font-weight:700;font-size:12.5px;cursor:pointer;transition:all .18s}
+.adm-chip:hover{color:var(--txt)}
+.adm-chip.on{color:#fff;background:rgba(62,166,255,.2);border-color:rgba(62,166,255,.5)}
+.adm-scroll{overflow-x:auto}
+.admin-table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:720px}
+.admin-table thead th{text-align:left;color:var(--faint);font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:14px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.admin-table thead th:first-child{padding-left:4px}
+.admin-table thead th.r{text-align:right}
+.admin-table th,.admin-table td{vertical-align:middle}
+.adm-st{margin-top:12px;color:var(--mut);font-size:13px;min-height:18px}
+.req-st{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:800;padding:4px 9px;border-radius:99px;white-space:nowrap}
+.req-st::before{content:'';width:6px;height:6px;border-radius:50%}
+.req-st.wait{color:#ffd83d;background:rgba(255,216,61,.1)}
+.req-st.wait::before{background:#ffd83d}
+.req-st.frozen{color:#ff5f57;background:rgba(255,95,87,.12)}
+.req-st.frozen::before{background:#ff5f57}
+.req-st.ok{color:#7dff6b;background:rgba(125,255,107,.1)}
+.req-st.ok::before{background:#7dff6b}
+.req-st.no{color:#ff8d7a;background:rgba(255,95,87,.08)}
+.req-st.no::before{background:#ff8d7a}
 .role-chip{display:inline-block;border:0;cursor:pointer;font-family:'Manrope';font-weight:800;font-size:10.5px;letter-spacing:.03em;padding:4px 8px;border-radius:6px;margin:2px;background:rgba(148,163,200,.08);color:var(--faint);transition:color .15s,background .15s}
 .role-chip.on{color:#0A0E14}
 .role-chip[data-role="owner"].on{background:#ffd83d;color:#000}
@@ -457,7 +523,6 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
 .role-chip[data-role="moder"].on{background:#7dff6b;color:#000}
 .role-chip[data-role="tester"].on{background:#6be8ff;color:#000}
 .role-chip:disabled{opacity:.5;cursor:default}
-.admin-table th,.admin-table td{vertical-align:middle}
 </style>
 <script>
 (function () {
@@ -470,10 +535,41 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
     var d = new Date(sec * 1000)
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
   }
+  function setCount(id, n) {
+    var el = document.getElementById(id)
+    if (!el) return
+    el.textContent = n || ''
+  }
+  function showTab(tab) {
+    document.querySelectorAll('.adm-tab').forEach(function (t) { t.classList.toggle('on', t.getAttribute('data-tab') === tab) })
+    document.querySelectorAll('.adm-pane').forEach(function (p) { p.classList.toggle('on', p.id === 'pane-' + tab) })
+  }
+  document.querySelectorAll('.adm-tab').forEach(function (t) {
+    t.addEventListener('click', function () { showTab(t.getAttribute('data-tab')) })
+  })
+  var lastUsers = []
+  var lastReqs = []
+  var reqCat = 'pending'
+  function setReqCat(cat) {
+    reqCat = cat
+    document.querySelectorAll('#reqCats .adm-chip').forEach(function (x) { x.classList.toggle('on', x.getAttribute('data-cat') === cat) })
+    renderReqs(lastReqs)
+  }
+  document.querySelectorAll('#reqCats .adm-chip').forEach(function (c) {
+    c.addEventListener('click', function () { setReqCat(c.getAttribute('data-cat')) })
+  })
+  var qUsersEl = document.getElementById('qUsers')
+  if (qUsersEl) qUsersEl.addEventListener('input', function () { render(lastUsers) })
   function render(users) {
+    lastUsers = users
+    setCount('ctUsers', users.length)
+    var q = (qUsersEl ? qUsersEl.value.trim().toLowerCase() : '')
+    var list = q
+      ? users.filter(function (u) { return String(u.nickname || '').toLowerCase().indexOf(q) !== -1 || String(u.id || '').indexOf(q) !== -1 })
+      : users
     rows.innerHTML = ''
-    if (!users.length) { rows.innerHTML = '<tr><td colspan="7" style="padding:18px;color:var(--faint)">Пока никого нет.</td></tr>'; return }
-    users.forEach(function (u) {
+    if (!list.length) { rows.innerHTML = '<tr><td colspan="7" style="padding:18px;color:var(--faint)">' + (q ? 'Никого не найдено.' : 'Пока никого нет.') + '</td></tr>'; return }
+    list.forEach(function (u) {
       var tr = document.createElement('tr')
       tr.style.borderTop = '1px solid var(--line)'
       var roles = u.roles || []
@@ -506,6 +602,7 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
   }
   function renderBans(list) {
     var el = document.getElementById('banList')
+    setCount('ctBans', list.length)
     if (!list.length) { el.innerHTML = '<p style="color:var(--faint);font-size:13px">Забаненных нет.</p>'; return }
     el.innerHTML = list.map(function (b) {
       return '<div style="display:flex;gap:10px;align-items:center;padding:8px 2px;border-top:1px solid var(--line)">' +
@@ -552,29 +649,45 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
   if (banReasonEl) banReasonEl.addEventListener('keydown', banEnter)
   loadBans()
 
+  function reqInCat(r) {
+    if (reqCat === 'frozen') return r.status === 'pending' && !!r.banned
+    if (reqCat === 'accepted') return r.status === 'accepted'
+    if (reqCat === 'denied') return r.status === 'denied'
+    return r.status === 'pending' && !r.banned
+  }
   function renderReqs(list) {
     var el = document.getElementById('loginReqs')
     if (!el) return
-    if (!list.length) { el.innerHTML = '<p style="color:var(--faint);font-size:13px;padding:8px 0">Заявок пока нет.</p>'; return }
-    el.innerHTML = list.map(function (r) {
+    lastReqs = list
+    var shown = list.filter(reqInCat)
+    if (!shown.length) { el.innerHTML = '<p style="color:var(--faint);font-size:13px;padding:10px 0">В этой категории пусто.</p>'; return }
+    el.innerHTML = shown.map(function (r) {
       var who = r.nickname ? esc2(r.nickname) : (r.discordName ? esc2(r.discordName) : 'Не определён')
       var who2 = r.nickname && r.discordName ? ' <span style="color:var(--faint)">· ' + esc2(r.discordName) + '</span>' : ''
-      var ava = r.avatarUrl ? '<img src="' + esc2(r.avatarUrl) + '" style="width:26px;height:26px;border-radius:50%;flex:none" />' : '<span style="width:26px;height:26px;border-radius:50%;background:var(--line);flex:none"></span>'
-      var st = r.status === 'accepted' ? ' <b style="color:#7dff6b">одобрен</b>' : r.status === 'denied' ? ' <b style="color:#ff5f57">отклонён</b>' : ' <b style="color:#ffd83d">ждёт</b>'
-      var frozen = r.banned ? ' <b style="color:#ff5f57">аккаунт заморожен</b>' : ''
+      var ava = r.avatarUrl ? '<img src="' + esc2(r.avatarUrl) + '" style="width:28px;height:28px;border-radius:50%;flex:none" />' : '<span style="width:28px;height:28px;border-radius:50%;background:var(--line);flex:none"></span>'
+      var stCls, stTxt
+      if (r.status === 'accepted') { stCls = 'ok'; stTxt = 'одобрен' }
+      else if (r.status === 'denied') { stCls = 'no'; stTxt = 'отклонён' }
+      else if (r.banned) { stCls = 'frozen'; stTxt = 'заморожен' }
+      else { stCls = 'wait'; stTxt = 'ждёт' }
       var acts = r.status === 'pending'
         ? '<button class="btn sm" data-approve="' + esc2(r.deviceCode) + '" style="margin-right:8px">Одобрить</button><button class="btn sm danger" data-deny="' + esc2(r.deviceCode) + '">Отклонить</button>'
         : ''
-      return '<div style="display:flex;gap:12px;align-items:center;padding:9px 0;border-top:1px solid var(--line)">' + ava +
+      return '<div style="display:flex;gap:12px;align-items:center;padding:12px 4px">' + ava +
         '<div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700">' + who + who2 + '</div>' +
         '<div style="color:var(--faint);font-size:12px">Код ' + esc2(r.userCode || '') + ' · ' + human2(r.createdAt) + '</div></div>' +
-        '<span style="white-space:nowrap">' + frozen + ' ' + st + '</span>' + acts + '</div>'
+        '<span class="req-st ' + stCls + '">' + stTxt + '</span>' +
+        (acts ? '<span style="white-space:nowrap">' + acts + '</span>' : '') + '</div>'
     }).join('')
   }
   function loadReqs() {
     fetch('/v2/admin/login-requests').then(function (r) {
       if (r.status === 401) return
-      return r.json().then(function (d) { renderReqs(d.requests || []) })
+      return r.json().then(function (d) {
+        var reqs = d.requests || []
+        setCount('ctReqs', reqs.filter(function (x) { return x.status === 'pending' }).length)
+        renderReqs(reqs)
+      })
     }).catch(function () {})
   }
   loadReqs()
@@ -582,6 +695,7 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
 
   function renderAdmins(list) {
     var el = document.getElementById('admList')
+    setCount('ctAdmins', list.length)
     if (!el) return
     if (!list.length) { el.innerHTML = '<p style="color:var(--faint);font-size:13px">Никого нет. Выдай доступ по нику игрока.</p>'; return }
     el.innerHTML = list.map(function (a) {
