@@ -19,6 +19,7 @@ const ICONS = `
   <symbol id="ic-check" viewBox="0 0 24 24"><path d="m5 13 4 4L19 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="ic-code" viewBox="0 0 24 24"><path d="m8 6-6 6 6 6M16 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="ic-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1.4 0 2-.8 2-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-1 .8-1.7 1.9-1.7H16a5 5 0 0 0 5-5c0-4-4-7.3-9-7.3Z" fill="currentColor"/><circle cx="7.5" cy="10.5" r="1.2" fill="#0A0E14"/><circle cx="12" cy="7.8" r="1.2" fill="#0A0E14"/><circle cx="16.2" cy="10.5" r="1.2" fill="#0A0E14"/></symbol>
+  <symbol id="ic-pen" viewBox="0 0 24 24"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
   <symbol id="ic-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
   <symbol id="ic-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 </svg>`
@@ -153,6 +154,7 @@ footer{border-top:1px solid var(--line);background:rgba(8,11,17,.6);padding:52px
 .prof-nick{font-family:'Unbounded';font-weight:800;font-size:26px;line-height:1.1;letter-spacing:-.01em;background:linear-gradient(100deg,#F2F6FB,#9DC7FF);-webkit-background-clip:text;background-clip:text;color:transparent;word-break:break-word}
 .prof-disc{display:flex;align-items:center;gap:8px;color:var(--mut);font-size:13.5px;margin-top:9px}
 .prof-disc .ic{width:16px;height:16px;color:#5865F2;flex:none}
+.prof-about{margin-top:8px;font-size:13px;color:var(--mut);line-height:1.55;white-space:pre-wrap;word-break:break-word;max-width:560px}
 .prof-roles{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto;padding-bottom:8px;justify-content:flex-end;max-width:55%}
 .p-badge{font-family:'Unbounded';font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:6px 11px;border-radius:8px;line-height:1}
 .p-badge.owner{background:linear-gradient(135deg,#FFB84D,#FF8A3D);color:#1A1206}
@@ -493,6 +495,22 @@ const PROFILE_SCRIPT = `
     if (!confirm('Убрать свою аватарку?')) return
     patchAvatar('', document.getElementById('avaMsg'))
   }
+  var aboutBtn = document.getElementById('aboutBtn')
+  if (aboutBtn) aboutBtn.onclick = function () {
+    var about = document.getElementById('about').value
+    var aboutMsg = document.getElementById('aboutMsg')
+    if (about.length > 300) { msg(aboutMsg, 'Максимум 300 символов'); return }
+    aboutBtn.disabled = true
+    fetch('/v2/users/me', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ about: about }) })
+      .then(function (r) { return r.json().catch(function () { return {} }).then(function (d) {
+        if (!r.ok) { msg(aboutMsg, d.message || 'Не сохранилось'); return }
+        var pa = document.getElementById('profAbout')
+        if (pa) { pa.textContent = about; pa.style.display = about ? '' : 'none' }
+        msg(aboutMsg, about ? 'Описание сохранено' : 'Описание убрано', true)
+      }) })
+      .catch(function () { msg(aboutMsg, 'Сеть недоступна — попробуй ещё раз') })
+      .then(function () { aboutBtn.disabled = false })
+  }
 })();
 `
 
@@ -516,6 +534,7 @@ export const profilePage = ({ user }) => {
       <div class="prof-who">
         <div class="prof-nick" id="profNick">${esc(user.nickname)}</div>
         <div class="prof-disc">${ICON('ic-discord')}<span>${esc(user.discordName || '')} · Discord</span></div>
+        ${user.about ? `<div class="prof-about" id="profAbout">${esc(user.about)}</div>` : '<div class="prof-about" id="profAbout" style="display:none"></div>'}
       </div>
       ${roles ? `<div class="prof-roles">${roles}</div>` : ''}
     </div>
@@ -553,6 +572,12 @@ export const profilePage = ({ user }) => {
       <button class="btn sm" id="banApply">Применить</button>
     </div>
     <div class="msg" id="banMsg"></div>
+  </div>
+  <div class="panel" style="margin-top:24px">
+    <div class="ph"><span class="pic">${ICON('ic-pen')}</span><div><h2>Описание профиля</h2><p>Коротко о себе — видно тебе и друзьям. До 300 символов.</p></div></div>
+    <textarea id="about" maxlength="300" rows="3" placeholder="Например: строю выживание с друзьями, люблю мини-игры">${esc(user.about || '')}</textarea>
+    <button class="btn btn-block" id="aboutBtn">${ICON('ic-check')}Сохранить описание</button>
+    <div class="msg" id="aboutMsg"></div>
   </div>
 </div>` + FOOT + `<script>${PROFILE_SCRIPT}</script>`
 }

@@ -871,11 +871,13 @@ app.get('/v2/users/me', requireAuth, ah(async (req, res) => {
     avatarUrl: await avatarForUser(user, hostBase(req)),
     roles: rolesOf(user),
     banner: user.banner || '',
+    about: user.about || '',
   })
 }))
 
 const NICK_RE = /^[\p{L}\p{N}\p{P}\p{S} ]{2,20}$/u
 const normalizeNick = (s) => String(s || '').trim().replace(/\s+/g, ' ').slice(0, 20)
+const ABOUT_MAX = 300
 
 const BANNER_RE = /^#[0-9a-fA-F]{3,8}$/
 const AVATAR_MAX_B64 = 2_500_000
@@ -899,7 +901,10 @@ app.patch('/v2/users/me', requireAuth, ah(async (req, res) => {
   const hasBanner = typeof body.banner === 'string'
   const hasNick = typeof body.nickname === 'string' && body.nickname.trim()
   const hasAvatar = typeof body.avatar === 'string'
-  if (!hasBanner && !hasNick && !hasAvatar) return res.status(400).json({ message: 'Не передано ни одно поле' })
+  const hasAbout = typeof body.about === 'string'
+  if (!hasBanner && !hasNick && !hasAvatar && !hasAbout) {
+    return res.status(400).json({ message: 'Не передано ни одно поле' })
+  }
   if (hasBanner) {
     const b = body.banner.trim()
     if (b && !BANNER_RE.test(b)) {
@@ -942,8 +947,17 @@ app.patch('/v2/users/me', requireAuth, ah(async (req, res) => {
       throw err
     }
   }
+  if (hasAbout) {
+    const about = String(body.about).trim().slice(0, ABOUT_MAX)
+    await query('UPDATE users SET about = $1 WHERE id = $2', [about, req.userId])
+  }
   const { rows } = await query('SELECT * FROM users WHERE id = $1', [req.userId])
-  res.json({ nickname: rows[0].nickname, avatarUrl: await avatarForUser(rows[0], hostBase(req)), banner: rows[0].banner || '' })
+  res.json({
+    nickname: rows[0].nickname,
+    avatarUrl: await avatarForUser(rows[0], hostBase(req)),
+    banner: rows[0].banner || '',
+    about: rows[0].about || '',
+  })
 }))
 
 app.post('/v2/launcher/heartbeat', requireAuth, (req, res) => res.json({}))
@@ -1327,6 +1341,7 @@ app.get('/v2/friends/profile/:uid', requireAuth, ah(async (req, res) => {
     avatarUrl: absAvatar(req, u),
     roles: rolesOf(u),
     banner: u.banner || '',
+    about: u.about || '',
     text: playing ? (p.server || p.build || 'Играет') : online ? 'В лаунчере' : 'Игрок Enemy',
     online,
     playing,
