@@ -1512,7 +1512,6 @@ async function fetchHotmc(category, offset) {
   try {
     d = await hotmcOnce(url)
   } catch (e) {
-    // stale-while-revalidate: пока свежий список не пришёл, отдаём прошлый
     if (offset <= 0 && hotmcCache.servers.length) return hotmcCache
     throw e
   }
@@ -1552,8 +1551,6 @@ app.get('/v2/rating/servers', requireAuth, (req, res) => {
 
 // ============ Modrinth: поиск и категории ============
 
-// Modrinth просит присылать UA и без него отдаёт 429/пустые ответы в вебвью.
-// Каталог качаем через сервер: один клиент, кеш тегов, стабильный заголовок.
 const MR_API = 'https://api.modrinth.com/v2'
 const MR_UA = 'enemy-launcher/0.0.49 (enemy-launcher.net)'
 let mrTagsCache = { at: 0, tags: null }
