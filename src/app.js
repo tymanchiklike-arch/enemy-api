@@ -1479,31 +1479,67 @@ app.post('/v2/friends/presence/heartbeat', requireAuth, ah(async (req, res) => {
 /// кешируем на 5 минут — список популярных серверов меняется медленно.
 const HOTMC_API = 'https://hotmc.ru/api/v1/servers'
 let hotmcCache = { at: 0, servers: [], total: 0 }
-const HOTMC_TTL = 5 * 60 * 1000
+const HOTMC_TTL = 3 * 60 * 1000
 
-async function fetchHotmc(category) {
-  const now = Date.now()
-  if (now - hotmcCache.at < HOTMC_TTL) return hotmcCache
-  const url = HOTMC_API + '?limit=30&sort=rating' + (category ? '&category=' + encodeURIComponent(category) : '')
+function hotmcPick(keys) {
+  for (const v of keys) {
+    if (v !== undefined && v !== null && String(v) !== '') return v
+  }
+  return undefined
+}
+
+async function hotmcOnce(url) {
   const r = await fetch(url, {
     headers: {
       'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
       Accept: 'application/json',
+      Referer: 'https://hotmc.ru/',
     },
   })
   if (!r.ok) throw new Error('hotmc http ' + r.status)
-  const d = await r.json()
+  return r.json()
+}
+
+async function fetchHotmc(category, offset) {
+  const now = Date.now()
+  if (offset <= 0 && now - hotmcCache.at < HOTMC_TTL && hotmcCache.servers.length) return hotmcCache
+  const params = new URLSearchParams({ limit: '30', sort: 'rating' })
+  if (category) params.set('category', category)
+  if (offset > 0) params.set('offset', String(offset))
+  const url = HOTMC_API + '?' + params.toString()
+  let d
+  try {
+    d = await hotmcOnce(url)
+  } catch (e) {
+    // stale-while-revalidate: пока свежий список не пришёл, отдаём прошлый
+    if (offset <= 0 && hotmcCache.servers.length) return hotmcCache
+    throw e
+  }
   const list = Array.isArray(d) ? d : d.servers || d.list || []
-  hotmcCache = { at: now, servers: list, total: d.total ?? list.length }
-  return hotmcCache
+  const servers = list.map((s) => ({
+    name: hotmcPick([s.name, s.title]) || 'Сервер',
+    slug: hotmcPick([s.slug, s.id]) !== undefined ? String(hotmcPick([s.slug, s.id])) : String(s.id || 0),
+    description: hotmcPick([s.short_description, s.shortDesc, s.description, s.desc]),
+    ip: hotmcPick([s.ip, s.address]),
+    online: Number(hotmcPick([s.online, s.players, s.avg_online, s.avgOnline, 0]) || 0),
+    avgOnline: Number(hotmcPick([s.avg_online, s.avgOnline, 0]) || 0),
+    bannerUrl: hotmcPick([s.banner_url, s.bannerUrl, s.banner]),
+    logoUrl: hotmcPick([s.logo_url, s.logoUrl, s.logo]),
+    versionMajors: Array.isArray(s.version_majors) ? s.version_majors : Array.isArray(s.versions) ? s.versions : [],
+    categories: Array.isArray(s.categories) ? s.categories : s.category ? [s.category] : [],
+    motd: hotmcPick([s.motd]),
+    license: hotmcPick([s.license, s.lic]),
+  }))
+  if (offset <= 0) hotmcCache = { at: now, servers, total: d.total ?? list.length }
+  return { at: now, servers, total: d.total ?? list.length }
 }
 
 app.get('/v2/rating/servers', requireAuth, (req, res) => {
   void (async () => {
     if (req.query.source === 'hotmc') {
       try {
-        const d = await fetchHotmc(String(req.query.category || ''))
+        const d = await fetchHotmc(String(req.query.category || ''), Number(req.query.offset || 0) || 0)
         res.json({ servers: d.servers, topThree: [], total: d.total })
       } catch (e) {
         res.status(502).json({ error: String(e) })
@@ -1511,6 +1547,59 @@ app.get('/v2/rating/servers', requireAuth, (req, res) => {
       return
     }
     res.json({ servers: [], topThree: [], total: 0 })
+  })()
+})
+
+// ============ Modrinth: поиск и категории ============
+
+// Modrinth просит присылать UA и без него отдаёт 429/пустые ответы в вебвью.
+// Каталог качаем через сервер: один клиент, кеш тегов, стабильный заголовок.
+const MR_API = 'https://api.modrinth.com/v2'
+const MR_UA = 'enemy-launcher/0.0.49 (enemy-launcher.net)'
+let mrTagsCache = { at: 0, tags: null }
+
+async function mrFetch(url) {
+  const r = await fetch(url, {
+    headers: { 'User-Agent': MR_UA, Accept: 'application/json' },
+  })
+  if (!r.ok) throw new Error('modrinth http ' + r.status)
+  return r.json()
+}
+
+app.get('/v2/modrinth/search', requireAuth, (req, res) => {
+  void (async () => {
+    try {
+      const q = new URLSearchParams()
+      for (const key of ['query', 'limit', 'offset', 'index', 'facets']) {
+        const v = req.query[key]
+        if (v) q.set(key, String(v))
+      }
+      const d = await mrFetch(MR_API + '/search?' + q.toString())
+      res.json(d)
+    } catch (e) {
+      res.status(502).json({ error: String(e) })
+    }
+  })()
+})
+
+app.get('/v2/modrinth/tags', requireAuth, (req, res) => {
+  const now = Date.now()
+  if (mrTagsCache.tags && now - mrTagsCache.at < 6 * 60 * 60 * 1000) {
+    res.json(mrTagsCache.tags)
+    return
+  }
+  void (async () => {
+    try {
+      const d = await mrFetch(MR_API + '/tag/category')
+      mrTagsCache = { at: now, tags: d }
+      res.json(d)
+    } catch (e) {
+      if (mrTagsCache.tags) {
+        res.json(mrTagsCache.tags)
+        return
+      }
+      res.status(502).json({ error: String(e) })
+    }
   })()
 })
 
