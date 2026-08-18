@@ -662,7 +662,7 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
       <div class="adm-scroll">
         <table class="admin-table">
           <thead><tr>
-            <th>#</th><th>Ник</th><th>Discord</th><th>Роли</th><th>IP</th><th>Создан</th><th class="r">Действия</th>
+            <th>#</th><th>Ник</th><th>Discord</th><th>Роли</th><th>НОВА</th><th>IP</th><th>Создан</th><th class="r">Действия</th>
           </tr></thead>
           <tbody id="rows"></tbody>
         </table>
@@ -818,7 +818,7 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
       ? users.filter(function (u) { return String(u.nickname || '').toLowerCase().indexOf(q) !== -1 || String(u.id || '').indexOf(q) !== -1 })
       : users
     rows.innerHTML = ''
-    if (!list.length) { rows.innerHTML = '<tr><td colspan="7" style="padding:18px;color:var(--faint)">' + (q ? 'Никого не найдено.' : 'Пока никого нет.') + '</td></tr>'; return }
+    if (!list.length) { rows.innerHTML = '<tr><td colspan="8" style="padding:18px;color:var(--faint)">' + (q ? 'Никого не найдено.' : 'Пока никого нет.') + '</td></tr>'; return }
     list.forEach(function (u) {
       var tr = document.createElement('tr')
       tr.style.borderTop = '1px solid var(--line)'
@@ -834,6 +834,12 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
         (u.banned ? ' <span style="color:#ff5f57;font-weight:800;font-size:11px">ЗАБАНЕН</span>' : '') + '</td>' +
         '<td style="padding:10px 8px;color:var(--mut)">' + esc2(u.discord_username || (u.discord_id ? '#' + u.discord_id : '—')) + '</td>' +
         '<td style="padding:10px 8px;white-space:nowrap;min-width:180px">' + chips + '</td>' +
+        '<td style="padding:10px 8px;white-space:nowrap">' +
+          '<span style="display:block;color:' + (u.novaUntil > Date.now() ? '#6be8ff' : 'var(--faint)') + ';font-size:12px;font-weight:700">' + (u.novaUntil > Date.now() ? 'до ' + human(u.novaUntil / 1000) : 'нет') + '</span>' +
+          '<div style="display:flex;gap:4px;margin-top:4px">' +
+            '<input type="number" min="1" max="3650" value="30" data-novad="' + u.id + '" style="width:58px;padding:6px 8px;font-size:12.5px" title="Срок в днях" />' +
+            '<button class="btn sm" data-nova="' + u.id + '" title="Выдать НОВА на указанный срок">Выдать</button>' +
+          '</div></td>' +
         '<td style="padding:10px 8px;white-space:nowrap">' + (u.last_ip
           ? '<span class="copy-ip" data-ip="' + esc2(u.last_ip) + '" title="Копировать IP">' + esc2(u.last_ip) + '</span>'
           : '<span style="color:var(--faint)">—</span>') + '</td>' +
@@ -1069,6 +1075,25 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
           msg('Бейдж #' + uid + ': ' + (d.roles.length ? d.roles.join(', ') : 'снят'))
         })
       }).catch(function () { msg('Ошибка сети') }).then(function () { chip.disabled = false })
+      return
+    }
+    var nva = e.target.closest('button[data-nova]')
+    if (nva) {
+      var nid = nva.getAttribute('data-nova')
+      var nInput = nva.closest('tr').querySelector('input[data-novad]')
+      var nDays = Math.floor(Number(nInput && nInput.value)) || 0
+      nva.disabled = true
+      fetch('/v2/admin/set-nova', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: nid, days: nDays })
+      }).then(function (r) {
+        return r.json().then(function (d) {
+          if (!r.ok) { msg(d.message || 'Не получилось'); return }
+          msg('НОВА #' + nid + ': ' + (d.novaUntil ? 'до ' + human(d.novaUntil / 1000) : 'снята'))
+          loadUsers()
+        })
+      }).catch(function () { msg('Ошибка сети') }).then(function () { nva.disabled = false })
       return
     }
     var ub = e.target.closest('button[data-unban]')

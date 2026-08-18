@@ -42,6 +42,7 @@ const ensureSchema = () => {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS banner TEXT NOT NULL DEFAULT '';
       ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_avatar TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS about TEXT NOT NULL DEFAULT '';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS nova_until BIGINT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS last_ip TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS banned BOOLEAN NOT NULL DEFAULT false;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS ban_reason TEXT NOT NULL DEFAULT '';
@@ -227,6 +228,12 @@ export const setUserRoles = async (userId, roles) => {
   const single = clean.length ? [clean[clean.length - 1]] : []
   await query('UPDATE users SET roles = $1 WHERE id = $2', [JSON.stringify(single), userId])
   return single
+}
+
+export const novaOf = (user) => (user && user.nova_until ? Number(user.nova_until) : 0)
+
+export const setNova = async (userId, untilMs) => {
+  await query('UPDATE users SET nova_until = $1 WHERE id = $2', [untilMs ? Number(untilMs) : null, userId])
 }
 
 export const newUser = async (nickname, email = null) => {

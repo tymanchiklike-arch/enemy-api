@@ -41,6 +41,8 @@ import {
   bumpPresence,
   rolesOf,
   setUserRoles,
+  novaOf,
+  setNova,
 } from './db.js'
 import { requireAuth, setSessionReader, signAccess, verifyAccess } from './auth.js'
 import { adminPage, confirmPage, errorPage, profilePage, sitePage } from './site.js'
@@ -358,6 +360,7 @@ app.get('/profile', ah(async (req, res) => {
         avatarUrl: await avatarForUser(user, hostBase(req)),
         banner: user.banner || '',
         roles: rolesOf(user),
+        novaUntil: novaOf(user),
       },
     }))
 }))
@@ -437,7 +440,7 @@ app.get('/admin/logout', (req, res) => {
 app.get('/v2/admin/users', ah(async (req, res) => {
   if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
   const { rows } = await query(
-    'SELECT id, nickname, discord_id, discord_username, email, roles, last_ip, created_at, banned, ban_reason, discord_avatar, custom_avatar FROM users ORDER BY created_at DESC LIMIT 500',
+    'SELECT id, nickname, discord_id, discord_username, email, roles, last_ip, created_at, banned, ban_reason, discord_avatar, custom_avatar, nova_until FROM users ORDER BY created_at DESC LIMIT 500',
   )
   res.json({
     users: rows.map((r) => ({
@@ -447,6 +450,7 @@ app.get('/v2/admin/users', ah(async (req, res) => {
       discord_username: r.discord_username,
       email: r.email,
       roles: rolesOf(r),
+      novaUntil: novaOf(r),
       last_ip: r.last_ip || null,
       created_at: r.created_at,
       banned: !!r.banned,
@@ -543,6 +547,24 @@ app.post('/v2/admin/set-roles', ah(async (req, res) => {
   if (!rows || !rows.length) return res.status(404).json({ message: 'Пользователь не найден' })
   const clean = await setUserRoles(Number(rows[0].id), roles)
   res.json({ ok: true, roles: clean })
+}))
+
+app.post('/v2/admin/set-nova', ah(async (req, res) => {
+  if (!(await isAdmin(req))) return res.status(401).json({ message: 'нет доступа' })
+  const id = Number(req.body && req.body.id)
+  const nick = String((req.body && req.body.nickname) || '').trim()
+  const days = Math.floor(Number(req.body && req.body.days) || 0)
+  if (!Number.isFinite(days) || days < 0 || days > 3650) return res.status(400).json({ message: 'срок от 0 до 3650 дней' })
+  let rows
+  if (id) {
+    rows = (await query('SELECT id FROM users WHERE id = $1', [id])).rows
+  } else if (nick) {
+    rows = (await query('SELECT id FROM users WHERE LOWER(nickname) = LOWER($1) LIMIT 1', [nick])).rows
+  }
+  if (!rows || !rows.length) return res.status(404).json({ message: 'Пользователь не найден' })
+  const until = days ? Date.now() + days * 86400000 : 0
+  await setNova(Number(rows[0].id), until)
+  res.json({ ok: true, novaUntil: until })
 }))
 
 app.post('/v2/admin/set-nick', ah(async (req, res) => {
@@ -872,6 +894,7 @@ app.get('/v2/users/me', requireAuth, ah(async (req, res) => {
     roles: rolesOf(user),
     banner: user.banner || '',
     about: user.about || '',
+    novaUntil: novaOf(user),
   })
 }))
 
@@ -1143,6 +1166,7 @@ const presenceRow = async (me, user, base = '') => {
   return {
     ...friendRow(user, base),
     roles: rolesOf(user),
+    novaUntil: novaOf(user),
     online,
     playing,
     text: playing
@@ -1228,6 +1252,7 @@ app.get('/v2/friends/search', requireAuth, ah(async (req, res) => {
       nickname: u.nickname,
       avatarUrl: absAvatar(req, u),
       roles: rolesOf(u),
+      novaUntil: novaOf(u),
       isFriend,
       pending,
       text: 'Игрок Enemy',
@@ -1342,6 +1367,7 @@ app.get('/v2/friends/profile/:uid', requireAuth, ah(async (req, res) => {
     roles: rolesOf(u),
     banner: u.banner || '',
     about: u.about || '',
+    novaUntil: novaOf(u),
     text: playing ? (p.server || p.build || 'Играет') : online ? 'В лаунчере' : 'Игрок Enemy',
     online,
     playing,
