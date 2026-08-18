@@ -22,6 +22,7 @@ const ICONS = `
   <symbol id="ic-pen" viewBox="0 0 24 24"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
   <symbol id="ic-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
   <symbol id="ic-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="ic-gift" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1" fill="currentColor"/><rect x="5" y="12" width="14" height="9" rx="2" fill="currentColor"/><path d="M12 8v13" stroke="currentColor" stroke-width="2"/><path d="M12 8H8.5a2.5 2.5 0 1 1 0-5C11 3 12 5 12 8Zm0 0h3.5a2.5 2.5 0 1 0 0-5C13 3 12 5 12 8Z" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
 </svg>`
 
 const ICON = (name, cls = 'ic') => `<svg class="${cls}"><use href="#${name}"/></svg>`
@@ -653,6 +654,7 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
     <button class="adm-tab on" data-tab="users">${ICON('ic-users')}Игроки<span class="adb" id="ctUsers"></span></button>
     <button class="adm-tab" data-tab="reqs">${ICON('ic-key')}Обжалование<span class="adb warn" id="ctAppeals"></span></button>
     <button class="adm-tab" data-tab="bans">${ICON('ic-shield')}Баны<span class="adb" id="ctBans"></span></button>
+    <button class="adm-tab" data-tab="donates">${ICON('ic-gift')}Донаты<span class="adb" id="ctDon"></span></button>
     <button class="adm-tab" data-tab="admins">${ICON('ic-lock')}Доступ<span class="adb" id="ctAdmins"></span></button>
   </nav>
 
@@ -716,6 +718,14 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
         <button class="btn" id="admAdd">${ICON('ic-user')}Дать доступ</button>
       </div>
       <div id="admList" class="adm-list"></div>
+    </div>
+  </section>
+
+  <section class="adm-pane" id="pane-donates">
+    <div class="adm-card">
+      <div class="adm-h"><h3>Донаты</h3><input id="qDon" placeholder="Поиск по нику или id…" /></div>
+      <p class="secd">Выдай игроку подписку: выбери позицию и срок в днях, нажми «Выдать». Срок начинается с сегодняшнего дня.</p>
+      <div id="donList" class="adm-list"></div>
     </div>
   </section>
 </div>
@@ -828,10 +838,10 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
         return '<button class="role-chip' + (on ? ' on' : '') + '" data-uid="' + u.id + '" data-role="' + r + '">' + r.charAt(0).toUpperCase() + r.slice(1) + '</button>'
       }).join('')
       tr.innerHTML = '<td style="padding:10px 16px;color:var(--faint);white-space:nowrap">' + u.id + '</td>' +
-        '<td style="padding:10px 8px">' + (u.avatarUrl
-          ? '<img src="' + esc2(u.avatarUrl) + '" style="width:34px;height:34px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:10px" />'
-          : '') + '<input data-uid="' + u.id + '" value="' + esc2(u.nickname) + '" maxlength="20" style="max-width:150px;padding:8px 10px;font-size:13px" />' +
-        (u.banned ? ' <span style="color:#ff5f57;font-weight:800;font-size:11px">ЗАБАНЕН</span>' : '') + '</td>' +
+        '<td style="padding:10px 8px"><div style="display:flex;align-items:center;gap:10px">' + (u.avatarUrl
+          ? '<img src="' + esc2(u.avatarUrl) + '" style="width:34px;height:34px;border-radius:50%;object-fit:cover;flex:none" />'
+          : '') + '<input data-uid="' + u.id + '" value="' + esc2(u.nickname) + '" maxlength="20" style="max-width:150px;padding:8px 10px;font-size:13px;flex:1;min-width:80px" />' +
+        (u.banned ? ' <span style="color:#ff5f57;font-weight:800;font-size:11px;white-space:nowrap">ЗАБАНЕН</span>' : '') + '</div></td>' +
         '<td style="padding:10px 8px;color:var(--mut)">' + esc2(u.discord_username || (u.discord_id ? '#' + u.discord_id : '—')) + '</td>' +
         '<td style="padding:10px 8px;white-space:nowrap;min-width:180px">' + chips + '</td>' +
         '<td style="padding:10px 8px;white-space:nowrap">' +
@@ -1038,10 +1048,36 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
   function loadUsers() {
     fetch('/v2/admin/users').then(function (r) {
       if (r.status === 401) { msg('Сессия истекла — перезайди под паролем.'); location.href = '/admin'; return }
-      return r.json().then(function (d) { render(d.users || []) })
+      return r.json().then(function (d) { render(d.users || []); renderDon(d.users || []) })
     }).catch(function () { msg('Ошибка сети') })
   }
   loadUsers()
+  var donEl = document.getElementById('donList')
+  var qDonEl = document.getElementById('qDon')
+  if (qDonEl) qDonEl.addEventListener('input', function () { renderDon(lastUsers) })
+  function renderDon(list) {
+    lastUsers = list
+    if (!donEl) return
+    setCount('ctDon', list.length)
+    var q = (qDonEl ? qDonEl.value.trim().toLowerCase() : '')
+    var shown = q
+      ? list.filter(function (u) { return String(u.nickname || '').toLowerCase().indexOf(q) !== -1 || String(u.id || '').indexOf(q) !== -1 })
+      : list
+    if (!shown.length) { donEl.innerHTML = '<p style="color:var(--faint);font-size:13px;padding:10px 0">' + (q ? 'Никого не найдено.' : 'Пока никого нет.') + '</p>'; return }
+    donEl.innerHTML = shown.map(function (u) {
+      var active = u.novaUntil > Date.now()
+      var ava = u.avatarUrl
+        ? '<img src="' + esc2(u.avatarUrl) + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex:none" />'
+        : '<span style="width:36px;height:36px;border-radius:50%;background:var(--line);flex:none"></span>'
+      var days = [7, 14, 30, 90, 180, 365].map(function (d) { return '<option' + (d === 30 ? ' selected' : '') + '>' + d + '</option>' }).join('')
+      return '<div style="display:flex;gap:12px;align-items:center;padding:12px 4px">' + ava +
+        '<div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc2(u.nickname) + '</div>' +
+        '<div style="color:' + (active ? '#6be8ff' : 'var(--faint)') + ';font-size:12px">' + (active ? 'НОВА до ' + human(u.novaUntil / 1000) : 'без подписки') + '</div></div>' +
+        '<select data-donitem="' + u.id + '" style="padding:8px 10px;font-size:13px;border-radius:8px;border:1px solid var(--line);background:#0A0E14;color:#E8ECF6"><option>НОВА</option></select>' +
+        '<select data-dondays="' + u.id + '" style="padding:8px 10px;font-size:13px;border-radius:8px;border:1px solid var(--line);background:#0A0E14;color:#E8ECF6">' + days + '</select>' +
+        '<button class="btn sm" data-don="' + u.id + '" style="margin:0">Выдать</button></div>'
+    }).join('')
+  }
   function rowRoles(uid) {
     var tr = rows.querySelector('button.role-chip[data-uid="' + uid + '"]').closest('tr')
     var out = []
@@ -1075,6 +1111,26 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
           msg('Бейдж #' + uid + ': ' + (d.roles.length ? d.roles.join(', ') : 'снят'))
         })
       }).catch(function () { msg('Ошибка сети') }).then(function () { chip.disabled = false })
+      return
+    }
+    var don = e.target.closest('button[data-don]')
+    if (don) {
+      var did = don.getAttribute('data-don')
+      var donRow = don.closest('div')
+      var dit = (donRow.querySelector('select[data-donitem]') || {}).value || 'НОВА'
+      var dDays = Math.floor(Number((donRow.querySelector('select[data-dondays]') || {}).value)) || 0
+      don.disabled = true
+      fetch('/v2/admin/set-nova', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: did, days: dDays })
+      }).then(function (r) {
+        return r.json().then(function (d) {
+          if (!r.ok) { msg(d.message || 'Не получилось'); return }
+          msg('#' + did + ' ' + dit + ': ' + (d.novaUntil ? 'до ' + human(d.novaUntil / 1000) : 'снята'))
+          loadUsers()
+        })
+      }).catch(function () { msg('Ошибка сети') }).then(function () { don.disabled = false })
       return
     }
     var nva = e.target.closest('button[data-nova]')
