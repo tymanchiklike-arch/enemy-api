@@ -666,7 +666,7 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
       <div class="adm-scroll">
         <table class="admin-table">
           <thead><tr>
-            <th>#</th><th>Ник</th><th>Discord</th><th>Роли</th><th>НОВА</th><th>IP</th><th>Создан</th><th class="r">Действия</th>
+            <th>#</th><th>Ник</th><th>Discord</th><th>IP</th><th>Создан</th><th class="r">Действия</th>
           </tr></thead>
           <tbody id="rows"></tbody>
         </table>
@@ -793,26 +793,28 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
 .role-chip[data-role="moder"].on{background:#7dff6b;color:#000}
 .role-chip[data-role="tester"].on{background:#6be8ff;color:#000}
 .role-chip:disabled{opacity:.5;cursor:default}
-.adm-person{display:flex;gap:12px;align-items:center;padding:11px 14px;border-radius:12px;background:rgba(148,163,200,.05);border:1px solid var(--line);margin-bottom:8px;flex-wrap:wrap}
-.adm-person .ph{border-radius:50%;object-fit:cover;flex:none}
-.adm-person .ph.off{background:var(--line)}
-.adm-person .who{flex:1;min-width:130px}
-.adm-person .who b{font-size:13.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
-.adm-person .who .st{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--faint);font-weight:600}
-.adm-person .who .st::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none}
-.adm-person .who .st.hot{color:#6be8ff}
-.adm-person .who .st.hot::before{background:#6be8ff}
-.adm-person select{padding:8px 10px;font-size:13px;border-radius:8px;border:1px solid var(--line);background:#0A0E14;color:#E8ECF6;outline:none}
-.adm-person .btns{display:flex;gap:6px}
-.adm-person .btn.sm{margin:0}
-.adm-person .btn.sm.danger{background:rgba(255,95,87,.12);color:#ff8d7a;border:1px solid rgba(255,95,87,.3)}
-.adm-person .btn.sm.danger:hover{background:rgba(255,95,87,.22);color:#ffb4a6}
+.adm-person{display:flex;gap:14px;align-items:center;padding:12px 14px;border-radius:14px;background:linear-gradient(180deg,rgba(148,163,200,.07),rgba(148,163,200,.03));border:1px solid var(--line);margin-bottom:9px;transition:border-color .18s,background .18s}
+.adm-person:hover{border-color:rgba(62,166,255,.45);background:linear-gradient(180deg,rgba(148,163,200,.1),rgba(148,163,200,.04))}
+.adm-person .ph-wrap{flex:none;padding:2px;border-radius:50%;background:linear-gradient(135deg,rgba(62,166,255,.65),rgba(30,139,232,.25));box-shadow:0 2px 10px rgba(0,0,0,.3)}
+.adm-person .ph-wrap .ph{display:block;border-radius:50%;object-fit:cover;border:2px solid #0A0E14}
+.adm-person .ph-wrap .ph.off{background:var(--line)}
+.adm-person .who{flex:1;min-width:140px;display:flex;flex-direction:column;gap:4px}
+.adm-person .who b{font-size:13.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.adm-person .pill{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;letter-spacing:.02em;padding:3px 9px;border-radius:99px;color:var(--faint);background:rgba(148,163,200,.08);white-space:nowrap}
+.adm-person .pill::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none}
+.adm-person .pill.hot{color:#6be8ff;background:rgba(107,232,255,.1)}
+.adm-person .pill.hot::before{background:#6be8ff;box-shadow:0 0 6px rgba(107,232,255,.6)}
+.adm-person .ctrl{display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.adm-person select{appearance:none;-webkit-appearance:none;padding:8px 28px 8px 12px;font-size:13px;font-weight:600;border-radius:9px;border:1px solid var(--line);background:#0A0E14 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2394A4C8' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;color:#E8ECF6;outline:none;cursor:pointer;transition:border-color .15s}
+.adm-person select:hover{border-color:rgba(62,166,255,.5)}
+.adm-person .ctrl .btn.sm{margin:0}
+.adm-person .ctrl .btn.sm.danger{background:rgba(255,95,87,.12);color:#ff8d7a;border:1px solid rgba(255,95,87,.3);box-shadow:none}
+.adm-person .ctrl .btn.sm.danger:hover{background:rgba(255,95,87,.22);color:#ffb4a6}
 </style>
 <script>
 (function () {
   var rows = document.getElementById('rows')
   var st = document.getElementById('st')
-  var ROLE_ORDER = ['owner', 'admin', 'moder', 'tester']
   function msg(t) { st.textContent = t }
   function human(sec) {
     if (!sec) return '—'
@@ -852,28 +854,16 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
       ? users.filter(function (u) { return String(u.nickname || '').toLowerCase().indexOf(q) !== -1 || String(u.id || '').indexOf(q) !== -1 })
       : users
     rows.innerHTML = ''
-    if (!list.length) { rows.innerHTML = '<tr><td colspan="8" style="padding:18px;color:var(--faint)">' + (q ? 'Никого не найдено.' : 'Пока никого нет.') + '</td></tr>'; return }
+    if (!list.length) { rows.innerHTML = '<tr><td colspan="6" style="padding:18px;color:var(--faint)">' + (q ? 'Никого не найдено.' : 'Пока никого нет.') + '</td></tr>'; return }
     list.forEach(function (u) {
       var tr = document.createElement('tr')
       tr.style.borderTop = '1px solid var(--line)'
-      var roles = u.roles || []
-      var chips = ROLE_ORDER.map(function (r) {
-        var on = roles.indexOf(r) !== -1
-        return '<button class="role-chip' + (on ? ' on' : '') + '" data-uid="' + u.id + '" data-role="' + r + '">' + r.charAt(0).toUpperCase() + r.slice(1) + '</button>'
-      }).join('')
       tr.innerHTML = '<td style="padding:10px 16px;color:var(--faint);white-space:nowrap">' + u.id + '</td>' +
         '<td style="padding:10px 8px"><div style="display:flex;align-items:center;gap:10px">' + (u.avatarUrl
           ? '<img src="' + esc2(u.avatarUrl) + '" style="width:34px;height:34px;border-radius:50%;object-fit:cover;flex:none" />'
           : '') + '<input data-uid="' + u.id + '" value="' + esc2(u.nickname) + '" maxlength="20" style="max-width:150px;padding:8px 10px;font-size:13px;flex:1;min-width:80px" />' +
         (u.banned ? ' <span style="color:#ff5f57;font-weight:800;font-size:11px;white-space:nowrap">ЗАБАНЕН</span>' : '') + '</div></td>' +
         '<td style="padding:10px 8px;color:var(--mut)">' + esc2(u.discord_username || (u.discord_id ? '#' + u.discord_id : '—')) + '</td>' +
-        '<td style="padding:10px 8px;white-space:nowrap;min-width:180px">' + chips + '</td>' +
-        '<td style="padding:10px 8px;white-space:nowrap">' +
-          '<span style="display:block;color:' + (u.novaUntil > Date.now() ? '#6be8ff' : 'var(--faint)') + ';font-size:12px;font-weight:700">' + (u.novaUntil > Date.now() ? 'до ' + human(u.novaUntil / 1000) : 'нет') + '</span>' +
-          '<div style="display:flex;gap:4px;margin-top:4px">' +
-            '<input type="number" min="1" max="3650" value="30" data-novad="' + u.id + '" style="width:58px;padding:6px 8px;font-size:12.5px" title="Срок в днях" />' +
-            '<button class="btn sm" data-nova="' + u.id + '" title="Выдать НОВА на указанный срок">Выдать</button>' +
-          '</div></td>' +
         '<td style="padding:10px 8px;white-space:nowrap">' + (u.last_ip
           ? '<span class="copy-ip" data-ip="' + esc2(u.last_ip) + '" title="Копировать IP">' + esc2(u.last_ip) + '</span>'
           : '<span style="color:var(--faint)">—</span>') + '</td>' +
@@ -1100,15 +1090,16 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
     var daysOpts = [7, 14, 30, 90, 180, 365].map(function (d) { return '<option' + (d === 30 ? ' selected' : '') + '>' + d + '</option>' }).join('')
     donEl.innerHTML = shown.map(function (u) {
       var active = u.novaUntil > Date.now()
-      return '<div class="adm-person">' + avaTag(u, 40) +
+      return '<div class="adm-person">' +
+        '<div class="ph-wrap">' + avaTag(u, 42) + '</div>' +
         '<div class="who"><b>' + esc2(u.nickname) + '</b>' +
-        '<span class="st' + (active ? ' hot' : '') + '">' + (active ? 'НОВА до ' + human(u.novaUntil / 1000) : 'без подписки') + '</span></div>' +
+        '<span class="pill' + (active ? ' hot' : '') + '">' + (active ? 'НОВА · до ' + human(u.novaUntil / 1000) : 'без подписки') + '</span></div>' +
+        '<div class="ctrl">' +
         '<select data-donitem="' + u.id + '"><option>НОВА</option></select>' +
         '<select data-dondays="' + u.id + '">' + daysOpts + '</select>' +
-        '<span class="btns">' +
         '<button class="btn sm" data-don="' + u.id + '">Выдать</button>' +
         (active ? '<button class="btn sm danger" data-don-remove="' + u.id + '">Снять</button>' : '') +
-        '</span></div>'
+        '</div></div>'
     }).join('')
   }
   function rankLabel(u) {
@@ -1127,21 +1118,16 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
     var rankOpts = ['owner', 'admin', 'moder', 'tester'].map(function (r) { return '<option value="' + r + '">' + RANK_NAMES[r] + '</option>' }).join('')
     ranksEl.innerHTML = shown.map(function (u) {
       var r = u.roles && u.roles[0]
-      return '<div class="adm-person">' + avaTag(u, 40) +
+      return '<div class="adm-person">' +
+        '<div class="ph-wrap">' + avaTag(u, 42) + '</div>' +
         '<div class="who"><b>' + esc2(u.nickname) + '</b>' +
-        '<span class="st' + (r ? ' hot' : '') + '">' + rankLabel(u) + '</span></div>' +
+        '<span class="pill' + (r ? ' hot' : '') + '">' + rankLabel(u) + '</span></div>' +
+        '<div class="ctrl">' +
         '<select data-rank="' + u.id + '">' + rankOpts + '</select>' +
-        '<span class="btns">' +
         '<button class="btn sm" data-rank-set="' + u.id + '">Выдать</button>' +
         (r ? '<button class="btn sm danger" data-rank-remove="' + u.id + '">Снять</button>' : '') +
-        '</span></div>'
+        '</div></div>'
     }).join('')
-  }
-  function rowRoles(uid) {
-    var tr = rows.querySelector('button.role-chip[data-uid="' + uid + '"]').closest('tr')
-    var out = []
-    tr.querySelectorAll('.role-chip').forEach(function (c) { if (c.classList.contains('on')) out.push(c.getAttribute('data-role')) })
-    return out
   }
   document.addEventListener('click', function (e) {
     var cip = e.target.closest('.copy-ip')
@@ -1151,25 +1137,6 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(cipVal).then(copied).catch(copied)
       } else copied()
-      return
-    }
-    var chip = e.target.closest('button.role-chip')
-    if (chip) {
-      var uid = chip.getAttribute('data-uid')
-      var wasOn = chip.classList.contains('on')
-      chip.closest('tr').querySelectorAll('.role-chip').forEach(function (c) { c.classList.remove('on') })
-      if (!wasOn) chip.classList.add('on')
-      chip.disabled = true
-      fetch('/v2/admin/set-roles', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: uid, roles: rowRoles(uid) })
-      }).then(function (r) {
-        return r.json().then(function (d) {
-          if (!r.ok) { msg(d.message || 'Не получилось'); return }
-          msg('Бейдж #' + uid + ': ' + (d.roles.length ? d.roles.join(', ') : 'снят'))
-        })
-      }).catch(function () { msg('Ошибка сети') }).then(function () { chip.disabled = false })
       return
     }
     var dremove = e.target.closest('button[data-don-remove]')
@@ -1244,25 +1211,6 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
           loadUsers()
         })
       }).catch(function () { msg('Ошибка сети') }).then(function () { don.disabled = false })
-      return
-    }
-    var nva = e.target.closest('button[data-nova]')
-    if (nva) {
-      var nid = nva.getAttribute('data-nova')
-      var nInput = nva.closest('tr').querySelector('input[data-novad]')
-      var nDays = Math.floor(Number(nInput && nInput.value)) || 0
-      nva.disabled = true
-      fetch('/v2/admin/set-nova', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: nid, days: nDays })
-      }).then(function (r) {
-        return r.json().then(function (d) {
-          if (!r.ok) { msg(d.message || 'Не получилось'); return }
-          msg('НОВА #' + nid + ': ' + (d.novaUntil ? 'до ' + human(d.novaUntil / 1000) : 'снята'))
-          loadUsers()
-        })
-      }).catch(function () { msg('Ошибка сети') }).then(function () { nva.disabled = false })
       return
     }
     var ub = e.target.closest('button[data-unban]')
