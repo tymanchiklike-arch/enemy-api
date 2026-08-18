@@ -793,23 +793,34 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
 .role-chip[data-role="moder"].on{background:#7dff6b;color:#000}
 .role-chip[data-role="tester"].on{background:#6be8ff;color:#000}
 .role-chip:disabled{opacity:.5;cursor:default}
-.adm-person{display:flex;gap:14px;align-items:center;padding:12px 14px;border-radius:14px;background:linear-gradient(180deg,rgba(148,163,200,.07),rgba(148,163,200,.03));border:1px solid var(--line);margin-bottom:9px;transition:border-color .18s,background .18s}
-.adm-person:hover{border-color:rgba(62,166,255,.45);background:linear-gradient(180deg,rgba(148,163,200,.1),rgba(148,163,200,.04))}
+.adm-person{display:flex;gap:16px;align-items:center;padding:14px;border-radius:16px;background:linear-gradient(180deg,rgba(148,163,200,.06),rgba(148,163,200,.02));border:1px solid var(--line);margin-bottom:10px;transition:border-color .18s,background .18s;flex-wrap:wrap}
+.adm-person:hover{border-color:rgba(62,166,255,.4);background:linear-gradient(180deg,rgba(148,163,200,.09),rgba(148,163,200,.03))}
 .adm-person .ph-wrap{flex:none;padding:2px;border-radius:50%;background:linear-gradient(135deg,rgba(62,166,255,.65),rgba(30,139,232,.25));box-shadow:0 2px 10px rgba(0,0,0,.3)}
 .adm-person .ph-wrap .ph{display:block;border-radius:50%;object-fit:cover;border:2px solid #0A0E14}
 .adm-person .ph-wrap .ph.off{background:var(--line)}
-.adm-person .who{flex:1;min-width:140px;display:flex;flex-direction:column;gap:4px}
-.adm-person .who b{font-size:13.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.adm-person .pill{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;letter-spacing:.02em;padding:3px 9px;border-radius:99px;color:var(--faint);background:rgba(148,163,200,.08);white-space:nowrap}
+.adm-person .who{flex:1;min-width:150px;display:flex;flex-direction:column;align-items:flex-start;gap:3px}
+.adm-person .who b{font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+.adm-person .who .pid{font-size:11px;color:var(--faint);font-weight:600;letter-spacing:.02em}
+.adm-person .pill{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;letter-spacing:.02em;padding:3px 9px;border-radius:99px;color:var(--faint);background:rgba(148,163,200,.08);white-space:nowrap;margin-top:2px}
 .adm-person .pill::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none}
 .adm-person .pill.hot{color:#6be8ff;background:rgba(107,232,255,.1)}
 .adm-person .pill.hot::before{background:#6be8ff;box-shadow:0 0 6px rgba(107,232,255,.6)}
-.adm-person .ctrl{display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
-.adm-person select{appearance:none;-webkit-appearance:none;padding:8px 28px 8px 12px;font-size:13px;font-weight:600;border-radius:9px;border:1px solid var(--line);background:#0A0E14 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2394A4C8' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;color:#E8ECF6;outline:none;cursor:pointer;transition:border-color .15s}
+.adm-person .grant{flex:none;display:flex;flex-direction:column;gap:9px;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:rgba(148,163,200,.05);min-width:252px}
+.adm-person .grant.nova{border-color:rgba(62,166,255,.3);background:linear-gradient(180deg,rgba(62,166,255,.1),rgba(30,139,232,.03))}
+.adm-person .grant.crown{border-color:rgba(255,216,61,.24);background:linear-gradient(180deg,rgba(255,216,61,.08),rgba(255,216,61,.02))}
+.adm-person .grant-cap{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.adm-person .grant-cap .ic{width:13px;height:13px;flex:none}
+.adm-person .grant.nova .grant-cap{color:#6be8ff}
+.adm-person .grant.nova .grant-cap .ic{color:#3EA6FF}
+.adm-person .grant.crown .grant-cap{color:#ffd83d}
+.adm-person .grant.crown .grant-cap .ic{color:#ffd83d}
+.adm-person .grant-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.adm-person .grant-row .g-lab{font-size:12px;font-weight:700;color:var(--faint);margin-right:2px;letter-spacing:.02em}
+.adm-person select{appearance:none;-webkit-appearance:none;padding:8px 28px 8px 12px;font-size:13px;font-weight:700;border-radius:9px;border:1px solid var(--line);background:#0A0E14 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2394A4C8' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;color:#E8ECF6;outline:none;cursor:pointer;transition:border-color .15s,color .15s}
 .adm-person select:hover{border-color:rgba(62,166,255,.5)}
-.adm-person .ctrl .btn.sm{margin:0}
-.adm-person .ctrl .btn.sm.danger{background:rgba(255,95,87,.12);color:#ff8d7a;border:1px solid rgba(255,95,87,.3);box-shadow:none}
-.adm-person .ctrl .btn.sm.danger:hover{background:rgba(255,95,87,.22);color:#ffb4a6}
+.adm-person .grant-row .btn.sm{margin:0}
+.adm-person .grant-row .btn.sm.danger{background:rgba(255,95,87,.12);color:#ff8d7a;border:1px solid rgba(255,95,87,.3);box-shadow:none}
+.adm-person .grant-row .btn.sm.danger:hover{background:rgba(255,95,87,.22);color:#ffb4a6}
 </style>
 <script>
 (function () {
@@ -1091,17 +1102,39 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
     donEl.innerHTML = shown.map(function (u) {
       var active = u.novaUntil > Date.now()
       return '<div class="adm-person">' +
-        '<div class="ph-wrap">' + avaTag(u, 42) + '</div>' +
-        '<div class="who"><b>' + esc2(u.nickname) + '</b>' +
-        '<span class="pill' + (active ? ' hot' : '') + '">' + (active ? 'НОВА · до ' + human(u.novaUntil / 1000) : 'без подписки') + '</span></div>' +
-        '<div class="ctrl">' +
-        '<select data-donitem="' + u.id + '"><option>НОВА</option></select>' +
+        '<div class="ph-wrap">' + avaTag(u, 44) + '</div>' +
+        '<div class="who">' +
+        '<b>' + esc2(u.nickname) + '</b>' +
+        '<span class="pid">#' + u.id + '</span>' +
+        '<span class="pill' + (active ? ' hot' : '') + '">' + (active ? 'НОВА · до ' + human(u.novaUntil / 1000) : 'без подписки') + '</span>' +
+        '</div>' +
+        '<div class="grant nova">' +
+        '<div class="grant-cap"><svg class="ic"><use href="#ic-gift"/></svg>Подписка НОВА</div>' +
+        '<div class="grant-row">' +
+        '<span class="g-lab">Срок</span>' +
         '<select data-dondays="' + u.id + '">' + daysOpts + '</select>' +
         '<button class="btn sm" data-don="' + u.id + '">Выдать</button>' +
         (active ? '<button class="btn sm danger" data-don-remove="' + u.id + '">Снять</button>' : '') +
-        '</div></div>'
+        '</div></div></div>'
     }).join('')
   }
+  var RANK_COLOR = { owner: '#ffd83d', admin: '#ff5f57', moder: '#7dff6b', tester: '#6be8ff' }
+  function rankOptsFor(u) {
+    var cur = u.roles && u.roles[0]
+    return ['owner', 'admin', 'moder', 'tester'].map(function (r) {
+      return '<option value="' + r + '" data-color="' + RANK_COLOR[r] + '"' + (cur === r ? ' selected' : '') + '>' + RANK_NAMES[r] + '</option>'
+    }).join('')
+  }
+  function colorRankSelect(sel) {
+    var opt = sel.options[sel.selectedIndex]
+    var c = (opt && opt.getAttribute('data-color')) || '#E8ECF6'
+    sel.style.color = c
+    sel.style.borderColor = c + '66'
+  }
+  document.addEventListener('change', function (e) {
+    var s = e.target.closest('select[data-rank]')
+    if (s) colorRankSelect(s)
+  })
   function rankLabel(u) {
     var r = u.roles && u.roles[0]
     return r ? (RANK_NAMES[r] || r) : 'Обычный игрок'
@@ -1115,19 +1148,24 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
       ? list.filter(function (u) { return String(u.nickname || '').toLowerCase().indexOf(q) !== -1 || String(u.id || '').indexOf(q) !== -1 })
       : list
     if (!shown.length) { ranksEl.innerHTML = '<p style="color:var(--faint);font-size:13px;padding:10px 0">' + (q ? 'Никого не найдено.' : 'Пока никого нет.') + '</p>'; return }
-    var rankOpts = ['owner', 'admin', 'moder', 'tester'].map(function (r) { return '<option value="' + r + '">' + RANK_NAMES[r] + '</option>' }).join('')
     ranksEl.innerHTML = shown.map(function (u) {
       var r = u.roles && u.roles[0]
       return '<div class="adm-person">' +
-        '<div class="ph-wrap">' + avaTag(u, 42) + '</div>' +
-        '<div class="who"><b>' + esc2(u.nickname) + '</b>' +
-        '<span class="pill' + (r ? ' hot' : '') + '">' + rankLabel(u) + '</span></div>' +
-        '<div class="ctrl">' +
-        '<select data-rank="' + u.id + '">' + rankOpts + '</select>' +
+        '<div class="ph-wrap">' + avaTag(u, 44) + '</div>' +
+        '<div class="who">' +
+        '<b>' + esc2(u.nickname) + '</b>' +
+        '<span class="pid">#' + u.id + '</span>' +
+        '<span class="pill' + (r ? ' hot' : '') + '">' + rankLabel(u) + '</span>' +
+        '</div>' +
+        '<div class="grant crown">' +
+        '<div class="grant-cap"><svg class="ic"><use href="#ic-crown"/></svg>Ранг игрока</div>' +
+        '<div class="grant-row">' +
+        '<select data-rank="' + u.id + '">' + rankOptsFor(u) + '</select>' +
         '<button class="btn sm" data-rank-set="' + u.id + '">Выдать</button>' +
         (r ? '<button class="btn sm danger" data-rank-remove="' + u.id + '">Снять</button>' : '') +
-        '</div></div>'
+        '</div></div></div>'
     }).join('')
+    ranksEl.querySelectorAll('select[data-rank]').forEach(function (s) { colorRankSelect(s) })
   }
   document.addEventListener('click', function (e) {
     var cip = e.target.closest('.copy-ip')
@@ -1197,7 +1235,7 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
     if (don) {
       var did = don.getAttribute('data-don')
       var donRow = don.closest('div')
-      var dit = (donRow.querySelector('select[data-donitem]') || {}).value || 'НОВА'
+      var dit = 'НОВА'
       var dDays = Math.floor(Number((donRow.querySelector('select[data-dondays]') || {}).value)) || 0
       don.disabled = true
       fetch('/v2/admin/set-nova', {
