@@ -726,7 +726,7 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
   <section class="adm-pane" id="pane-donates">
     <div class="adm-card">
       <div class="adm-h"><h3>Донаты</h3><input id="qDon" placeholder="Поиск по нику или id…" /></div>
-      <p class="secd">Выдай игроку подписку: выбери позицию и срок в днях, нажми «Выдать». «Снять» забирает подписку сразу.</p>
+      <p class="secd">Выдай игроку подписку: выбери срок в днях и нажми «Выдать». «Снять» забирает подписку сразу.</p>
       <div id="donList" class="adm-list"></div>
     </div>
   </section>
@@ -734,7 +734,7 @@ document.querySelector('input').addEventListener('keydown', function (e) { if (e
   <section class="adm-pane" id="pane-ranks">
     <div class="adm-card">
       <div class="adm-h"><h3>Ранги</h3><input id="qRanks" placeholder="Поиск по нику или id…" /></div>
-      <p class="secd">У игрока один ранг. У кого ранг не выдан — тот «Обычный игрок». «Снять» возвращает обычный ранг.</p>
+      <p class="secd">У игрока один ранг. Выбери ранг-чип и нажми «Выдать». У кого ранг не выдан — тот «Обычный игрок».</p>
       <div id="ranksList" class="adm-list"></div>
     </div>
   </section>
@@ -814,13 +814,18 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
 .adm-person .grant.nova .grant-cap .ic{color:#3EA6FF}
 .adm-person .grant.crown .grant-cap{color:#ffd83d}
 .adm-person .grant.crown .grant-cap .ic{color:#ffd83d}
-.adm-person .grant-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.adm-person .grant-row .g-lab{font-size:12px;font-weight:700;color:var(--faint);margin-right:2px;letter-spacing:.02em}
-.adm-person select{appearance:none;-webkit-appearance:none;padding:8px 28px 8px 12px;font-size:13px;font-weight:700;border-radius:9px;border:1px solid var(--line);background:#0A0E14 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2394A4C8' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;color:#E8ECF6;outline:none;cursor:pointer;transition:border-color .15s,color .15s}
-.adm-person select:hover{border-color:rgba(62,166,255,.5)}
-.adm-person .grant-row .btn.sm{margin:0}
-.adm-person .grant-row .btn.sm.danger{background:rgba(255,95,87,.12);color:#ff8d7a;border:1px solid rgba(255,95,87,.3);box-shadow:none}
-.adm-person .grant-row .btn.sm.danger:hover{background:rgba(255,95,87,.22);color:#ffb4a6}
+.adm-person .grant-field{display:flex;flex-direction:column;gap:8px}
+.adm-person .grant-field .g-lab{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.adm-person .chip-set{display:flex;gap:6px;flex-wrap:wrap}
+.adm-person .g-chip{appearance:none;border:1px solid var(--line);background:rgba(148,163,200,.07);color:var(--faint);border-radius:99px;padding:7px 13px;font-family:'Manrope';font-weight:800;font-size:12px;cursor:pointer;transition:all .15s}
+.adm-person .g-chip:hover{color:var(--txt);border-color:rgba(62,166,255,.45);background:rgba(148,163,200,.12)}
+.adm-person .g-chip.on{color:#0A0E14;background:#3EA6FF;border-color:#3EA6FF;box-shadow:0 3px 12px rgba(62,166,255,.35)}
+.adm-person .g-chip.rk{color:var(--cc)}
+.adm-person .g-chip.rk.on{color:var(--cc);background:rgba(255,255,255,.04);border-color:var(--cc);box-shadow:0 0 0 1px var(--cc) inset,0 3px 12px rgba(0,0,0,.3)}
+.adm-person .grant-acts{display:flex;gap:8px;flex-wrap:wrap}
+.adm-person .grant-acts .btn.sm{margin:0}
+.adm-person .grant-acts .btn.sm.danger{background:rgba(255,95,87,.12);color:#ff8d7a;border:1px solid rgba(255,95,87,.3);box-shadow:none}
+.adm-person .grant-acts .btn.sm.danger:hover{background:rgba(255,95,87,.22);color:#ffb4a6}
 </style>
 <script>
 (function () {
@@ -1098,7 +1103,9 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
       ? list.filter(function (u) { return String(u.nickname || '').toLowerCase().indexOf(q) !== -1 || String(u.id || '').indexOf(q) !== -1 })
       : list
     if (!shown.length) { donEl.innerHTML = '<p style="color:var(--faint);font-size:13px;padding:10px 0">' + (q ? 'Никого не найдено.' : 'Пока никого нет.') + '</p>'; return }
-    var daysOpts = [7, 14, 30, 90, 180, 365].map(function (d) { return '<option' + (d === 30 ? ' selected' : '') + '>' + d + '</option>' }).join('')
+    var dayChips = [7, 14, 30, 90, 180, 365].map(function (d) {
+      return '<button type="button" class="g-chip' + (d === 30 ? ' on' : '') + '" data-v="' + d + '">' + d + 'д</button>'
+    }).join('')
     donEl.innerHTML = shown.map(function (u) {
       var active = u.novaUntil > Date.now()
       return '<div class="adm-person">' +
@@ -1106,35 +1113,27 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
         '<div class="who">' +
         '<b>' + esc2(u.nickname) + '</b>' +
         '<span class="pid">#' + u.id + '</span>' +
-        '<span class="pill' + (active ? ' hot' : '') + '">' + (active ? 'НОВА · до ' + human(u.novaUntil / 1000) : 'без подписки') + '</span>' +
+        '<span class="pill' + (active ? ' hot' : '') + '">' + (active ? 'Nova · до ' + human(u.novaUntil / 1000) : 'без подписки') + '</span>' +
         '</div>' +
         '<div class="grant nova">' +
-        '<div class="grant-cap"><svg class="ic"><use href="#ic-gift"/></svg>Подписка НОВА</div>' +
-        '<div class="grant-row">' +
+        '<div class="grant-cap"><svg class="ic"><use href="#ic-gift"/></svg>Подписка Nova</div>' +
+        '<div class="grant-field">' +
         '<span class="g-lab">Срок</span>' +
-        '<select data-dondays="' + u.id + '">' + daysOpts + '</select>' +
+        '<div class="chip-set">' + dayChips + '</div>' +
+        '</div>' +
+        '<div class="grant-acts">' +
         '<button class="btn sm" data-don="' + u.id + '">Выдать</button>' +
         (active ? '<button class="btn sm danger" data-don-remove="' + u.id + '">Снять</button>' : '') +
         '</div></div></div>'
     }).join('')
   }
   var RANK_COLOR = { owner: '#ffd83d', admin: '#ff5f57', moder: '#7dff6b', tester: '#6be8ff' }
-  function rankOptsFor(u) {
+  function rankChipsFor(u) {
     var cur = u.roles && u.roles[0]
     return ['owner', 'admin', 'moder', 'tester'].map(function (r) {
-      return '<option value="' + r + '" data-color="' + RANK_COLOR[r] + '"' + (cur === r ? ' selected' : '') + '>' + RANK_NAMES[r] + '</option>'
+      return '<button type="button" class="g-chip rk" data-v="' + r + '" style="--cc:' + RANK_COLOR[r] + '"' + (cur === r ? ' on' : '') + '>' + RANK_NAMES[r] + '</button>'
     }).join('')
   }
-  function colorRankSelect(sel) {
-    var opt = sel.options[sel.selectedIndex]
-    var c = (opt && opt.getAttribute('data-color')) || '#E8ECF6'
-    sel.style.color = c
-    sel.style.borderColor = c + '66'
-  }
-  document.addEventListener('change', function (e) {
-    var s = e.target.closest('select[data-rank]')
-    if (s) colorRankSelect(s)
-  })
   function rankLabel(u) {
     var r = u.roles && u.roles[0]
     return r ? (RANK_NAMES[r] || r) : 'Обычный игрок'
@@ -1159,13 +1158,15 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
         '</div>' +
         '<div class="grant crown">' +
         '<div class="grant-cap"><svg class="ic"><use href="#ic-crown"/></svg>Ранг игрока</div>' +
-        '<div class="grant-row">' +
-        '<select data-rank="' + u.id + '">' + rankOptsFor(u) + '</select>' +
+        '<div class="grant-field">' +
+        '<span class="g-lab">Ранг</span>' +
+        '<div class="chip-set">' + rankChipsFor(u) + '</div>' +
+        '</div>' +
+        '<div class="grant-acts">' +
         '<button class="btn sm" data-rank-set="' + u.id + '">Выдать</button>' +
         (r ? '<button class="btn sm danger" data-rank-remove="' + u.id + '">Снять</button>' : '') +
         '</div></div></div>'
     }).join('')
-    ranksEl.querySelectorAll('select[data-rank]').forEach(function (s) { colorRankSelect(s) })
   }
   document.addEventListener('click', function (e) {
     var cip = e.target.closest('.copy-ip')
@@ -1177,10 +1178,16 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
       } else copied()
       return
     }
+    var gchip = e.target.closest('.g-chip')
+    if (gchip) {
+      gchip.closest('.chip-set').querySelectorAll('.g-chip').forEach(function (c) { c.classList.remove('on') })
+      gchip.classList.add('on')
+      return
+    }
     var dremove = e.target.closest('button[data-don-remove]')
     if (dremove) {
       var drid = dremove.getAttribute('data-don-remove')
-      if (!confirm('Забрать НОВА у игрока #' + drid + '?')) return
+      if (!confirm('Забрать Nova у игрока #' + drid + '?')) return
       dremove.disabled = true
       fetch('/v2/admin/set-nova', {
         method: 'POST',
@@ -1189,7 +1196,7 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
       }).then(function (r) {
         return r.json().then(function (d) {
           if (!r.ok) { msg(d.message || 'Не получилось'); return }
-          msg('НОВА #' + drid + ' снята')
+          msg('Nova #' + drid + ' снята')
           loadUsers()
         })
       }).catch(function () { msg('Ошибка сети') }).then(function () { dremove.disabled = false })
@@ -1198,7 +1205,8 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
     var rset = e.target.closest('button[data-rank-set]')
     if (rset) {
       var rid = rset.getAttribute('data-rank-set')
-      var rv = (rset.closest('.adm-person').querySelector('select[data-rank]') || {}).value || 'tester'
+      var rChip = rset.closest('.adm-person').querySelector('.chip-set .g-chip.on')
+      var rv = (rChip && rChip.getAttribute('data-v')) || 'tester'
       rset.disabled = true
       fetch('/v2/admin/set-roles', {
         method: 'POST',
@@ -1234,9 +1242,10 @@ nav{position:sticky;top:0;z-index:30;background:rgba(10,14,20,.97);backdrop-filt
     var don = e.target.closest('button[data-don]')
     if (don) {
       var did = don.getAttribute('data-don')
-      var donRow = don.closest('div')
-      var dit = 'НОВА'
-      var dDays = Math.floor(Number((donRow.querySelector('select[data-dondays]') || {}).value)) || 0
+      var donRow = don.closest('.adm-person')
+      var dit = 'Nova'
+      var dChip = donRow.querySelector('.chip-set .g-chip.on')
+      var dDays = Math.floor(Number(dChip && dChip.getAttribute('data-v'))) || 0
       don.disabled = true
       fetch('/v2/admin/set-nova', {
         method: 'POST',
