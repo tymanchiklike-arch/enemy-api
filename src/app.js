@@ -1578,8 +1578,9 @@ app.get('/v2/rating/servers', requireAuth, (req, res) => {
 // ============ Modrinth: поиск и категории ============
 
 const MR_API = 'https://api.modrinth.com/v2'
-const MR_UA = 'enemy-launcher/0.0.49 (enemy-launcher.net)'
+const MR_UA = 'enemy-launcher/0.0.51 (enemy-launcher.net)'
 let mrTagsCache = { at: 0, tags: null }
+const mrSearchCache = new Map()
 
 async function mrFetch(url) {
   const r = await fetch(url, {
@@ -1590,6 +1591,12 @@ async function mrFetch(url) {
 }
 
 app.get('/v2/modrinth/search', requireAuth, (req, res) => {
+  const key = req.originalUrl
+  const hit = mrSearchCache.get(key)
+  if (hit && Date.now() - hit.at < 5 * 60 * 1000) {
+    res.json(hit.data)
+    return
+  }
   void (async () => {
     try {
       const q = new URLSearchParams()
@@ -1598,6 +1605,11 @@ app.get('/v2/modrinth/search', requireAuth, (req, res) => {
         if (v) q.set(key, String(v))
       }
       const d = await mrFetch(MR_API + '/search?' + q.toString())
+      mrSearchCache.set(key, { at: Date.now(), data: d })
+      if (mrSearchCache.size > 400) {
+        const oldest = mrSearchCache.keys().next().value
+        mrSearchCache.delete(oldest)
+      }
       res.json(d)
     } catch (e) {
       res.status(502).json({ error: String(e) })
