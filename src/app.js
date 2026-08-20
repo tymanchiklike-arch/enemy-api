@@ -177,6 +177,29 @@ app.get('/download', (req, res) => {
   }
 })
 
+// Информация о свежей сборке для автообновления лаунчера. Версия берётся из
+// package.json репозитория лаунчера, хеш и размер — из собранного exe рядом.
+app.get('/v2/launcher/latest', (req, res) => {
+  const exe = join(APP_ROOT, '..', 'src-tauri', 'target', 'fast', 'enemy-launcher.exe')
+  const pkg = join(APP_ROOT, '..', 'package.json')
+  try {
+    const stat = statSync(exe)
+    const sha256 = createHash('sha256').update(readFileSync(exe)).digest('hex')
+    let version = '0.0.0'
+    try {
+      version = String(JSON.parse(readFileSync(pkg, 'utf8')).version || '0.0.0')
+    } catch {}
+    res.json({
+      version,
+      size: stat.size,
+      sha256,
+      url: hostBase(req) + '/download',
+    })
+  } catch {
+    res.status(404).json({ message: 'Сборка лаунчера ещё не выложена' })
+  }
+})
+
 // ============ Аватар по лицензии Mojang ============
 
 const MC_CACHE = new Map()
