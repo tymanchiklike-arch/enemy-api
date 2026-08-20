@@ -388,6 +388,8 @@ app.get('/profile', ah(async (req, res) => {
         bannerImg: novaBannerUrl(user, hostBase(req)),
         nickFont: novaActive(user) ? user.nick_font || '' : '',
         nickColor: novaActive(user) ? user.nick_color || '' : '',
+        novaAvaCrop: novaActive(user) ? parseCrop(user.nova_ava_crop) : null,
+        novaBanCrop: novaActive(user) ? parseCrop(user.nova_ban_crop) : null,
         roles: rolesOf(user),
         novaUntil: novaOf(user),
       },
@@ -927,6 +929,8 @@ app.get('/v2/users/me', requireAuth, ah(async (req, res) => {
     about: user.about || '',
     nickFont: novaActive(user) ? user.nick_font || '' : '',
     nickColor: novaActive(user) ? user.nick_color || '' : '',
+    novaAvaCrop: novaActive(user) ? parseCrop(user.nova_ava_crop) : null,
+    novaBanCrop: novaActive(user) ? parseCrop(user.nova_ban_crop) : null,
     novaUntil: novaOf(user),
   })
 }))
@@ -938,7 +942,7 @@ const ABOUT_MAX = 300
 const BANNER_RE = /^#[0-9a-fA-F]{3,8}$/
 const AVATAR_MAX_B64 = 2_500_000
 const AVATAR_MAX_BYTES = 1_800_000
-const NOVA_FONTS = ['unbounded', 'russo', 'jost', 'bebas']
+const NOVA_FONTS = ['sakura', 'headbang', 'mainframe', '8bit', 'modern']
 const NICK_COLOR_RE = /^#[0-9a-fA-F]{6}(,#[0-9a-fA-F]{6}){0,2}$/
 
 const isAvatarImage = (buf) => {
@@ -949,6 +953,33 @@ const isAvatarImage = (buf) => {
     head.startsWith('GIF8') ||
     (head.startsWith('RIFF') && buf.slice(8, 12).toString('binary') === 'WEBP')
   )
+}
+
+/// Crop region of the animated avatar/banner as JSON; empty when not set.
+const normalizeCrop = (c) => {
+  if (!c || typeof c !== 'object') return ''
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+  const l = num(c.l)
+  const t = num(c.t)
+  const w = num(c.w)
+  const h = num(c.h)
+  const iw = num(c.iw)
+  const ih = num(c.ih)
+  if (l == null || t == null || w == null || h == null || iw == null || ih == null) return ''
+  if (w <= 0 || h <= 0 || iw <= 0 || ih <= 0) return ''
+  if (l < 0 || t < 0 || l + w > 1.0001 || t + h > 1.0001) return ''
+  return JSON.stringify({ l, t, w, h, iw, ih })
+}
+const parseCrop = (json) => {
+  if (!json) return null
+  try {
+    const c = JSON.parse(json)
+    return c && typeof c === 'object' && typeof c.l === 'number' && typeof c.t === 'number' && typeof c.w === 'number' && typeof c.h === 'number'
+      ? { l: c.l, t: c.t, w: c.w, h: c.h, iw: c.iw, ih: c.ih }
+      : null
+  } catch {
+    return null
+  }
 }
 
 /// Смена ника, цвета баннера и/или своей аватарки. Работает из лаунчера
@@ -962,15 +993,17 @@ app.patch('/v2/users/me', requireAuth, ah(async (req, res) => {
   const hasAbout = typeof body.about === 'string'
   const hasNovaAvatar = typeof body.novaAvatar === 'string'
   const hasNovaBanner = typeof body.novaBanner === 'string'
+  const hasNovaAvaCrop = body.novaAvaCrop && typeof body.novaAvaCrop === 'object'
+  const hasNovaBanCrop = body.novaBanCrop && typeof body.novaBanCrop === 'object'
   const hasNickFont = typeof body.nickFont === 'string'
   const hasNickColor = typeof body.nickColor === 'string'
-  if (!hasBanner && !hasNick && !hasAvatar && !hasAbout && !hasNovaAvatar && !hasNovaBanner && !hasNickFont && !hasNickColor) {
+  if (!hasBanner && !hasNick && !hasAvatar && !hasAbout && !hasNovaAvatar && !hasNovaBanner && !hasNovaAvaCrop && !hasNovaBanCrop && !hasNickFont && !hasNickColor) {
     return res.status(400).json({ message: 'Не передано ни одно поле' })
   }
   const meRows = (await query('SELECT * FROM users WHERE id = $1', [req.userId])).rows
   const me = meRows[0]
   const liveNova = novaActive(me)
-  if (hasNovaAvatar || hasNovaBanner || hasNickFont || hasNickColor) {
+  if (hasNovaAvatar || hasNovaBanner || hasNovaAvaCrop || hasNovaBanCrop || hasNickFont || hasNickColor) {
     if (!liveNova) return res.status(403).json({ message: 'Анимации и стиль ника доступны только с подпиской Nova' })
   }
   if (hasBanner) {
@@ -1034,6 +1067,16 @@ app.patch('/v2/users/me', requireAuth, ah(async (req, res) => {
       await query('UPDATE users SET nova_banner = $1 WHERE id = $2', [b64, req.userId])
     }
   }
+  if (hasNovaAvaCrop) {
+    const c = normalizeCrop(body.novaAvaCrop)
+    if (!c) return res.status(400).json({ message: 'Область аватарки повреждена' })
+    await query('UPDATE users SET nova_ava_crop = $1 WHERE id = $2', [c, req.userId])
+  }
+  if (hasNovaBanCrop) {
+    const c = normalizeCrop(body.novaBanCrop)
+    if (!c) return res.status(400).json({ message: 'Область баннера повреждена' })
+    await query('UPDATE users SET nova_ban_crop = $1 WHERE id = $2', [c, req.userId])
+  }
   if (hasNickFont) {
     const f = body.nickFont.trim().toLowerCase()
     if (f && !NOVA_FONTS.includes(f)) {
@@ -1080,6 +1123,8 @@ app.patch('/v2/users/me', requireAuth, ah(async (req, res) => {
     about: u.about || '',
     nickFont: novaActive(u) ? u.nick_font || '' : '',
     nickColor: novaActive(u) ? u.nick_color || '' : '',
+    novaAvaCrop: novaActive(u) ? parseCrop(u.nova_ava_crop) : null,
+    novaBanCrop: novaActive(u) ? parseCrop(u.nova_ban_crop) : null,
     novaUntil: novaOf(u),
   })
 }))
@@ -1244,6 +1289,8 @@ const friendRow = (user, base = '') => ({
   bannerImg: novaBannerUrl(user, base),
   nickFont: novaActive(user) ? user.nick_font || '' : '',
   nickColor: novaActive(user) ? user.nick_color || '' : '',
+  novaAvaCrop: novaActive(user) ? parseCrop(user.nova_ava_crop) : null,
+  novaBanCrop: novaActive(user) ? parseCrop(user.nova_ban_crop) : null,
 })
 
 const rowToMsg = (row) => {
@@ -1310,13 +1357,13 @@ app.get('/v2/friends', requireAuth, ah(async (req, res) => {
 
 app.get('/v2/friends/requests', requireAuth, ah(async (req, res) => {
   const inc = await query(
-    `SELECT fr.id, fr.from_id, u.nickname, u.discord_avatar, u.custom_avatar, u.nova_avatar, u.nick_font, u.nick_color, u.nova_until
+    `SELECT fr.id, fr.from_id, u.nickname, u.discord_avatar, u.custom_avatar, u.nova_avatar, u.nick_font, u.nick_color, u.nova_until, u.nova_ava_crop, u.nova_ban_crop
      FROM friend_requests fr JOIN users u ON u.id = fr.from_id
      WHERE fr.to_id = $1 AND fr.status = 'pending' ORDER BY fr.created_at DESC`,
     [req.userId],
   )
   const out = await query(
-    `SELECT fr.id, fr.to_id, u.nickname, u.discord_avatar, u.custom_avatar, u.nova_avatar, u.nick_font, u.nick_color, u.nova_until
+    `SELECT fr.id, fr.to_id, u.nickname, u.discord_avatar, u.custom_avatar, u.nova_avatar, u.nick_font, u.nick_color, u.nova_until, u.nova_ava_crop, u.nova_ban_crop
      FROM friend_requests fr JOIN users u ON u.id = fr.to_id
      WHERE fr.from_id = $1 AND fr.status = 'pending' ORDER BY fr.created_at DESC`,
     [req.userId],
@@ -1328,6 +1375,8 @@ app.get('/v2/friends/requests', requireAuth, ah(async (req, res) => {
     avatarUrl: absAvatar(req, r),
     nickFont: novaActive(r) ? r.nick_font || '' : '',
     nickColor: novaActive(r) ? r.nick_color || '' : '',
+    novaAvaCrop: novaActive(r) ? parseCrop(r.nova_ava_crop) : null,
+    novaBanCrop: novaActive(r) ? parseCrop(r.nova_ban_crop) : null,
   })
   res.json({ incoming: inc.rows.map(map), outgoing: out.rows.map(map) })
 }))
@@ -1367,6 +1416,8 @@ app.get('/v2/friends/search', requireAuth, ah(async (req, res) => {
       bannerImg: novaBannerUrl(u, hostBase(req)),
       nickFont: novaActive(u) ? u.nick_font || '' : '',
       nickColor: novaActive(u) ? u.nick_color || '' : '',
+      novaAvaCrop: novaActive(u) ? parseCrop(u.nova_ava_crop) : null,
+      novaBanCrop: novaActive(u) ? parseCrop(u.nova_ban_crop) : null,
       isFriend,
       pending,
       text: 'Игрок Enemy',
@@ -1484,6 +1535,8 @@ app.get('/v2/friends/profile/:uid', requireAuth, ah(async (req, res) => {
     about: u.about || '',
     nickFont: novaActive(u) ? u.nick_font || '' : '',
     nickColor: novaActive(u) ? u.nick_color || '' : '',
+    novaAvaCrop: novaActive(u) ? parseCrop(u.nova_ava_crop) : null,
+    novaBanCrop: novaActive(u) ? parseCrop(u.nova_ban_crop) : null,
     novaUntil: novaOf(u),
     text: playing ? (p.server || p.build || 'Играет') : online ? 'В лаунчере' : 'Игрок Enemy',
     online,

@@ -29,7 +29,7 @@ const ICONS = `
 const ICON = (name, cls = 'ic') => `<svg class="${cls}"><use href="#${name}"/></svg>`
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;600;700;800;900&family=Manrope:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;600;700;800;900&family=Manrope:wght@400;500;600;700;800&family=Comfortaa:wght@400;700&family=Bangers&family=Share+Tech+Mono&family=Press+Start+2P&family=Montserrat:wght@400;700&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
 [id]{scroll-margin-top:96px}
@@ -383,10 +383,11 @@ const BANNER_COLORS = [
 ]
 
 const NICK_FONTS = {
-  unbounded: "'Unbounded',sans-serif",
-  russo: "'Arial Black','Segoe UI',sans-serif",
-  jost: "'Segoe UI',sans-serif",
-  bebas: "'Impact','Arial Narrow',sans-serif",
+  sakura: "'Comfortaa',sans-serif",
+  headbang: "'Bangers',cursive",
+  mainframe: "'Share Tech Mono',monospace",
+  '8bit': "'Press Start 2P',monospace",
+  modern: "'Montserrat',sans-serif",
 }
 
 const bannerBg = (hex) =>
@@ -527,15 +528,23 @@ const PROFILE_SCRIPT = `
 export const profilePage = ({ user }) => {
   const logged = esc(user.nickname)
   const letter = esc((user.discordName || user.nickname || 'E').slice(0, 1).toUpperCase())
+  const cropBg = (url, c) =>
+    c
+      ? ` style="background:url('${esc2(url)}') no-repeat;background-size:${(100 / c.w).toFixed(2)}% ${(100 / c.h).toFixed(2)}%;background-position:${c.w >= 0.999 ? 0 : ((c.l / (1 - c.w)) * 100).toFixed(2)}% ${c.h >= 0.999 ? 0 : ((c.t / (1 - c.h)) * 100).toFixed(2)}%"`
+      : ''
   const ava = user.avatarUrl
-    ? `<img class="prof-ava" id="profAva" src="${esc(user.avatarUrl)}" alt="" />`
+    ? user.novaAvaCrop
+      ? `<div class="prof-ava" id="profAva"${cropBg(user.avatarUrl, user.novaAvaCrop)}></div>`
+      : `<img class="prof-ava" id="profAva" src="${esc(user.avatarUrl)}" alt="" />`
     : `<div class="prof-ava" id="profAva">${letter}</div>`
   const roles = (user.roles || []).map((r) => `<span class="p-badge ${esc(r)}">${esc(r)}</span>`).join('')
   const swatches = BANNER_COLORS.map((hex) =>
     `<button class="sw" data-c="${hex}" style="background:${hex}" title="${hex}"></button>`,
   ).join('')
   const novaBanner = user.bannerImg
-    ? `<img class="prof-banner-img" src="${esc(user.bannerImg)}" alt="" />`
+    ? user.novaBanCrop
+      ? `<div class="prof-banner-img"${cropBg(user.bannerImg, user.novaBanCrop)}></div>`
+      : `<img class="prof-banner-img" src="${esc(user.bannerImg)}" alt="" />`
     : ''
   const nickStyle =
     user.nickFont || user.nickColor

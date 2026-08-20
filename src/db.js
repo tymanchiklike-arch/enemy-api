@@ -45,6 +45,8 @@ const ensureSchema = () => {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS nova_until BIGINT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS nova_avatar TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS nova_banner TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS nova_ava_crop TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS nova_ban_crop TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS nick_font TEXT NOT NULL DEFAULT '';
       ALTER TABLE users ADD COLUMN IF NOT EXISTS nick_color TEXT NOT NULL DEFAULT '';
       ALTER TABLE users ADD COLUMN IF NOT EXISTS last_ip TEXT;
