@@ -144,6 +144,7 @@ footer{border-top:1px solid var(--line);background:rgba(8,11,17,.6);padding:52px
 .legal{margin-top:44px;color:var(--faint);font-size:12px;line-height:1.7;max-width:900px}
 .panel.profile{padding:0;overflow:hidden;border-radius:22px}
 .prof-banner{position:relative;height:190px}
+.prof-banner-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1}
 .prof-banner::before{content:'';position:absolute;inset:0;background:linear-gradient(115deg,rgba(255,255,255,.16) 0%,rgba(255,255,255,.16) 18%,rgba(255,255,255,0) 42%)}
 .prof-banner::after{content:'';position:absolute;right:-30px;top:-40px;width:240px;height:240px;background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.15),rgba(255,255,255,0) 68%)}
 .prof-body{position:relative;display:flex;gap:24px;align-items:flex-end;padding:0 30px 30px;margin-top:-70px}
@@ -381,6 +382,13 @@ const BANNER_COLORS = [
   '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#f8fafc',
 ]
 
+const NICK_FONTS = {
+  unbounded: "'Unbounded',sans-serif",
+  russo: "'Arial Black','Segoe UI',sans-serif",
+  jost: "'Segoe UI',sans-serif",
+  bebas: "'Impact','Arial Narrow',sans-serif",
+}
+
 const bannerBg = (hex) =>
   hex
     ? 'linear-gradient(135deg, ' + hex + 'f2 0%, ' + hex + 'b8 45%, ' + hex + '55 78%, ' + hex + '1f 100%)'
@@ -526,15 +534,22 @@ export const profilePage = ({ user }) => {
   const swatches = BANNER_COLORS.map((hex) =>
     `<button class="sw" data-c="${hex}" style="background:${hex}" title="${hex}"></button>`,
   ).join('')
+  const novaBanner = user.bannerImg
+    ? `<img class="prof-banner-img" src="${esc(user.bannerImg)}" alt="" />`
+    : ''
+  const nickStyle =
+    user.nickFont || user.nickColor
+      ? ` style="font-family:${NICK_FONTS[user.nickFont] || "'Unbounded',sans-serif"};${user.nickColor ? 'background:linear-gradient(95deg,' + user.nickColor + ');-webkit-background-clip:text;background-clip:text;color:transparent' : ''}"`
+      : ''
   return HEAD('Профиль — Enemy') + NAV({ logged }) + `
 <div class="wrap" style="max-width:960px">
   <a class="prof-back" href="/">${ICON('ic-arrow')}На сайт</a>
   <div class="panel profile" style="margin-top:16px">
-    <div class="prof-banner" id="profBanner" style="background:${bannerBg(user.banner)}"></div>
+    <div class="prof-banner" id="profBanner" style="background:${bannerBg(user.banner)}">${novaBanner}</div>
     <div class="prof-body">
       <div class="prof-ava-wrap">${ava}</div>
       <div class="prof-who">
-        <div class="prof-nick" id="profNick">${esc(user.nickname)}</div>
+        <div class="prof-nick" id="profNick"${nickStyle}>${esc(user.nickname)}</div>
         <div class="prof-disc">${ICON('ic-discord')}<span>${esc(user.discordName || '')} · Discord</span></div>
         ${user.about ? `<div class="prof-about" id="profAbout">${esc(user.about)}</div>` : '<div class="prof-about" id="profAbout" style="display:none"></div>'}
       </div>
