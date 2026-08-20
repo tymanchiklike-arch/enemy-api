@@ -29,7 +29,7 @@ const ICONS = `
 const ICON = (name, cls = 'ic') => `<svg class="${cls}"><use href="#${name}"/></svg>`
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;600;700;800;900&family=Manrope:wght@400;500;600;700;800&family=Comfortaa:wght@400;700&family=Bangers&family=Share+Tech+Mono&family=Press+Start+2P&family=Montserrat:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;600;700;800;900&family=Manrope:wght@400;500;600;700;800&family=DynaPuff:wght@400;500;600;700&family=Bangers&family=Share+Tech+Mono&family=Press+Start+2P&family=Montserrat:wght@400;700&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
 [id]{scroll-margin-top:96px}
@@ -383,7 +383,7 @@ const BANNER_COLORS = [
 ]
 
 const NICK_FONTS = {
-  sakura: "'Comfortaa',sans-serif",
+  sakura: "'DynaPuff',sans-serif",
   headbang: "'Bangers',cursive",
   mainframe: "'Share Tech Mono',monospace",
   '8bit': "'Press Start 2P',monospace",
