@@ -413,6 +413,7 @@ export const typingPeers = async (userId, friendIds) => {
 }
 
 export const touchPresence = async (userId, data = {}) => {
+  const now = Date.now()
   await query(
     `INSERT INTO presence (user_id, status, server, server_ip, build, seen_at)
      VALUES ($1, $2, $3, $4, $5, $6)
@@ -421,14 +422,18 @@ export const touchPresence = async (userId, data = {}) => {
        server = EXCLUDED.server,
        server_ip = EXCLUDED.server_ip,
        build = EXCLUDED.build,
-       seen_at = EXCLUDED.seen_at`,
+       seen_at = EXCLUDED.seen_at
+     WHERE presence.seen_at < $6 - 20000
+        OR presence.status IS DISTINCT FROM EXCLUDED.status
+        OR presence.server IS DISTINCT FROM EXCLUDED.server
+        OR presence.build IS DISTINCT FROM EXCLUDED.build`,
     [
       userId,
       data.status || 'lobby',
       data.server || null,
       data.serverIp || null,
       data.build || null,
-      Date.now(),
+      now,
     ],
   )
 }
@@ -441,10 +446,12 @@ export const presenceOf = async (userId) => {
 /// Полл идёт каждые ~5 секунд: он только продлевает сессию, не трогая статус.
 /// Иначе регулярный опрос затирал бы «playing» своим lobby.
 export const bumpPresence = async (userId) => {
+  const now = Date.now()
   await query(
     `INSERT INTO presence (user_id, status, seen_at) VALUES ($1, 'lobby', $2)
-     ON CONFLICT (user_id) DO UPDATE SET seen_at = EXCLUDED.seen_at`,
-    [userId, Date.now()],
+     ON CONFLICT (user_id) DO UPDATE SET seen_at = EXCLUDED.seen_at
+     WHERE presence.seen_at < $2 - 20000`,
+    [userId, now],
   )
 }
 
